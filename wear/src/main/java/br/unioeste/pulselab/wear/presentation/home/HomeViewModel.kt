@@ -12,6 +12,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -29,7 +30,8 @@ sealed class HomeUiState {
         val stressIndex: Int?,
         val sessionId: String,
         val readingsSent: Int,
-        val phoneReachable: Boolean? = null
+        val phoneReachable: Boolean? = null,
+        val isSimulated: Boolean = false
     ) : HomeUiState()
 
     data class Error(val message: String) : HomeUiState()
@@ -46,11 +48,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _isPhoneConnected = MutableStateFlow(false)
     val isPhoneConnected: StateFlow<Boolean> = _isPhoneConnected.asStateFlow()
 
+    private val _isSimulated = MutableStateFlow(false)
+    val isSimulated: StateFlow<Boolean> = _isSimulated.asStateFlow()
+
     private var monitoringJob: Job? = null
 
     init {
         Wearable.getNodeClient(application).connectedNodes
             .addOnSuccessListener { nodes -> _isPhoneConnected.value = nodes.isNotEmpty() }
+    }
+
+    fun toggleDataSource() {
+        val newValue = !_isSimulated.value
+        _isSimulated.value = newValue
+        // Clear stale reading while the new source warms up
+        val current = _uiState.value as? HomeUiState.Monitoring
+        if (current != null) {
+            _uiState.value = current.copy(
+                bpm = null, hrv = null, spo2 = null, stressIndex = null,
+                isSimulated = newValue
+            )
+        }
     }
 
     fun startSession() {
@@ -61,20 +79,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             spo2 = null,
             stressIndex = null,
             sessionId = sessionId,
-            readingsSent = 0
+            readingsSent = 0,
+            isSimulated = _isSimulated.value
         )
 
-        monitoringJob = heartRateRepo.heartRateFlow()
+        // flatMapLatest on _isSimulated means toggling the source mid-session
+        // cancels the old flow and starts the new one automatically.
+        monitoringJob = _isSimulated
+            .flatMapLatest { useSimulated -> heartRateRepo.heartRateFlow(useSimulated) }
             .onEach { reading ->
                 val current = _uiState.value as? HomeUiState.Monitoring ?: return@onEach
 
-                Log.d(TAG, "Reading — BPM=${reading.bpm.toInt()} HRV=${reading.hrv}ms SpO2=${reading.spo2}% Stress=${reading.stressIndex}")
+                Log.d(TAG, "Reading — BPM=${reading.bpm.toInt()} HRV=${reading.hrv}ms SpO2=${reading.spo2}% Stress=${reading.stressIndex} sim=${reading.isSimulated}")
 
                 _uiState.value = current.copy(
                     bpm = reading.bpm,
                     hrv = reading.hrv,
                     spo2 = reading.spo2,
-                    stressIndex = reading.stressIndex
+                    stressIndex = reading.stressIndex,
+                    isSimulated = reading.isSimulated
                 )
 
                 viewModelScope.launch {

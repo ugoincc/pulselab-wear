@@ -80,11 +80,14 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     if (hasPermission) {
         val uiState by viewModel.uiState.collectAsState()
         val isPhoneConnected by viewModel.isPhoneConnected.collectAsState()
+        val isSimulated by viewModel.isSimulated.collectAsState()
         HomeScreenContent(
             uiState = uiState,
             isPhoneConnected = isPhoneConnected,
+            isSimulated = isSimulated,
             onStart = { viewModel.startSession() },
-            onStop  = { viewModel.stopSession() }
+            onStop  = { viewModel.stopSession() },
+            onToggleDataSource = { viewModel.toggleDataSource() }
         )
     } else {
         BodySensorsRationaleScreen(
@@ -150,8 +153,10 @@ private fun BodySensorsRationaleScreen(
 fun HomeScreenContent(
     uiState: HomeUiState,
     isPhoneConnected: Boolean = false,
+    isSimulated: Boolean = false,
     onStart: () -> Unit,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    onToggleDataSource: () -> Unit = {}
 ) {
     AppScaffold {
         val listState = rememberTransformingLazyColumnState()
@@ -192,12 +197,25 @@ fun HomeScreenContent(
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
+                        item {
+                            Button(
+                                onClick = onToggleDataSource,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(if (isSimulated) "Source: Fake" else "Source: Real")
+                            }
+                        }
                     }
 
                     is HomeUiState.Monitoring -> {
                         item {
                             Text(
-                                text = "HR: ${state.bpm?.let { "%.0f".format(it) } ?: "..."} BPM",
+                                text = buildString {
+                                    append("HR: ")
+                                    append(state.bpm?.let { "%.0f".format(it) } ?: "...")
+                                    append(" BPM")
+                                    if (state.isSimulated) append(" (SIM)")
+                                },
                                 style = MaterialTheme.typography.titleMedium,
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -224,6 +242,14 @@ fun HomeScreenContent(
                             )
                         }
                         item {
+                            Button(
+                                onClick = onToggleDataSource,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(if (state.isSimulated) "Source: Fake" else "Source: Real")
+                            }
+                        }
+                        item {
                             Text(
                                 text = "Sent: ${state.readingsSent}",
                                 style = MaterialTheme.typography.bodySmall
@@ -241,11 +267,6 @@ fun HomeScreenContent(
                                             MaterialTheme.colorScheme.error
                                     )
                                 }
-                            }
-                        }
-                        item {
-                            Button(onClick = onStop, modifier = Modifier.fillMaxWidth()) {
-                                Text("Stop Session")
                             }
                         }
                     }
@@ -297,12 +318,32 @@ fun PreviewIdle() {
 
 @WearPreviewDevices
 @Composable
+fun PreviewIdleSimulated() {
+    HomeScreenContent(uiState = HomeUiState.Idle, isSimulated = true, onStart = {}, onStop = {})
+}
+
+@WearPreviewDevices
+@Composable
 fun PreviewMonitoring() {
     HomeScreenContent(
         uiState = HomeUiState.Monitoring(
             bpm = 78.0, hrv = 55, spo2 = 98, stressIndex = 30,
-            sessionId = "preview", readingsSent = 12
+            sessionId = "preview", readingsSent = 12, isSimulated = false
         ),
+        onStart = {},
+        onStop = {}
+    )
+}
+
+@WearPreviewDevices
+@Composable
+fun PreviewMonitoringSimulated() {
+    HomeScreenContent(
+        uiState = HomeUiState.Monitoring(
+            bpm = 72.0, hrv = 48, spo2 = 98, stressIndex = 25,
+            sessionId = "preview-sim", readingsSent = 7, isSimulated = true
+        ),
+        isSimulated = true,
         onStart = {},
         onStop = {}
     )

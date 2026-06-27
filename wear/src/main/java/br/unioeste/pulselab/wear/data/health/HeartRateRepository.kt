@@ -12,31 +12,18 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.merge
-
-// ─── SIMULATION SWITCH ──────────────────────────────────────────────────────
-// true  → simulated data + real sensor run simultaneously (for side-by-side testing)
-// false → real sensor only
-private const val SIMULATE = true
-// ────────────────────────────────────────────────────────────────────────────
 
 private const val TAG = "HeartRateRepository"
 
 class HeartRateRepository(private val context: Context) {
 
     companion object {
-        // In simulate mode the permission gate is skipped — real sensor flow handles
-        // SecurityException internally if BODY_SENSORS hasn't been granted yet.
-        val requiresSensorPermission = !SIMULATE
+        const val requiresSensorPermission = true
     }
 
-    fun heartRateFlow(): Flow<HeartRateReading> {
-        return if (SIMULATE) merge(simulatedHeartRateFlow(), realHeartRateFlow())
-        else realHeartRateFlow()
-    }
+    fun heartRateFlow(useSimulated: Boolean): Flow<HeartRateReading> =
+        if (useSimulated) simulatedHeartRateFlow() else realHeartRateFlow()
 
-    // Generates stable fake BPM data for pipeline testing.
-    // Variance ±1 BPM per tick keeps the numbers readable on screen.
     private fun simulatedHeartRateFlow(): Flow<HeartRateReading> = flow {
         var bpm = 72.0
         while (true) {
@@ -54,8 +41,6 @@ class HeartRateRepository(private val context: Context) {
         }
     }
 
-    // Reads BPM from the standard Android heart rate sensor (TYPE_HEART_RATE).
-    // HRV, SpO2, and stress are not available via this API and will be null.
     private fun realHeartRateFlow(): Flow<HeartRateReading> = callbackFlow {
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         val heartRateSensor = sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE)
