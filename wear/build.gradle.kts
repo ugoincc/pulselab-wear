@@ -14,7 +14,11 @@ android {
     defaultConfig {
         applicationId = "br.unioeste.pulselab.wear"
         minSdk = 30
-        targetSdk = 36
+        // targetSdk 35 (not 36): on Wear OS 6 / API 36, BODY_SENSORS is deprecated
+        // and heart rate requires the granular health permissions (READ_HEART_RATE)
+        // via Health Services. Targeting 35 keeps the classic BODY_SENSORS runtime
+        // flow working with plain SensorManager. See Wear OS 6 behavior changes.
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
     }

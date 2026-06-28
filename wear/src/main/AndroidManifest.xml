@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Required to read the heart rate sensor (must also be requested at runtime in code) -->
     <uses-permission android:name="android.permission.BODY_SENSORS" />
-
+    <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />
     <uses-feature android:name="android.hardware.type.watch" />
 
     <application
