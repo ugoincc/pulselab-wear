@@ -249,6 +249,15 @@ fun HomeScreenContent(
                                 Text(if (state.isSimulated) "Source: Fake" else "Source: Real")
                             }
                         }
+                        if (state.isBackground) {
+                            item {
+                                Text(
+                                    text = "● Streaming in background",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFF4CAF50)
+                                )
+                            }
+                        }
                         item {
                             Text(
                                 text = "Sent: ${state.readingsSent}",
@@ -327,8 +336,9 @@ fun PreviewIdleSimulated() {
 fun PreviewMonitoring() {
     HomeScreenContent(
         uiState = HomeUiState.Monitoring(
-            bpm = 78.0, hrv = 55, spo2 = 98, stressIndex = 30,
-            sessionId = "preview", readingsSent = 12, isSimulated = false
+            bpm = 78.0, hrv = null, spo2 = null, stressIndex = null,
+            sessionId = "preview", readingsSent = 12, isSimulated = false,
+            isBackground = true
         ),
         onStart = {},
         onStop = {}

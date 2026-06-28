@@ -19,8 +19,8 @@ android {
         // via Health Services. Targeting 35 keeps the classic BODY_SENSORS runtime
         // flow working with plain SensorManager. See Wear OS 6 behavior changes.
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     buildTypes {
@@ -67,6 +67,11 @@ dependencies {
 
     // Gson — serializes sensor payloads sent over the Wear Data Layer
     implementation(libs.gson)
+
+    // Health Services — background heart rate via PassiveMonitoringClient.
+    // concurrent-futures-ktx provides ListenableFuture.await() for the async API.
+    implementation(libs.androidx.health.services.client)
+    implementation(libs.androidx.concurrent.futures.ktx)
 
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

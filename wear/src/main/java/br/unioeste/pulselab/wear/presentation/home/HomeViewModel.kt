@@ -6,15 +6,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.wearable.Wearable
 import br.unioeste.pulselab.wear.data.health.HeartRateRepository
+import br.unioeste.pulselab.wear.data.health.PassiveHeartRateStore
+import br.unioeste.pulselab.wear.data.health.PassiveMonitoringManager
 import br.unioeste.pulselab.wear.data.wearable.WearDataSender
 import br.unioeste.pulselab.wear.model.SensorBundle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -31,7 +32,8 @@ sealed class HomeUiState {
         val sessionId: String,
         val readingsSent: Int,
         val phoneReachable: Boolean? = null,
-        val isSimulated: Boolean = false
+        val isSimulated: Boolean = false,
+        val isBackground: Boolean = false
     ) : HomeUiState()
 
     data class Error(val message: String) : HomeUiState()
@@ -39,7 +41,8 @@ sealed class HomeUiState {
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val heartRateRepo = HeartRateRepository(application)
+    private val heartRateRepo = HeartRateRepository()
+    private val passiveManager = PassiveMonitoringManager(application)
     private val wearDataSender = WearDataSender()
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Idle)
@@ -56,17 +59,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     init {
         Wearable.getNodeClient(application).connectedNodes
             .addOnSuccessListener { nodes -> _isPhoneConnected.value = nodes.isNotEmpty() }
+
+        // If a background session is still registered with Health Services from a
+        // previous run, resume showing it so the user can see it and stop it.
+        if (passiveManager.isBackgroundActive) {
+            startSession()
+        }
     }
 
     fun toggleDataSource() {
         val newValue = !_isSimulated.value
         _isSimulated.value = newValue
-        // Clear stale reading while the new source warms up
+        // Clear the stale reading while the new source warms up.
         val current = _uiState.value as? HomeUiState.Monitoring
         if (current != null) {
             _uiState.value = current.copy(
                 bpm = null, hrv = null, spo2 = null, stressIndex = null,
-                isSimulated = newValue
+                readingsSent = 0, phoneReachable = null,
+                isSimulated = newValue, isBackground = !newValue
             )
         }
     }
@@ -80,52 +90,90 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             stressIndex = null,
             sessionId = sessionId,
             readingsSent = 0,
-            isSimulated = _isSimulated.value
+            isSimulated = _isSimulated.value,
+            isBackground = !_isSimulated.value
         )
 
-        // flatMapLatest on _isSimulated means toggling the source mid-session
-        // cancels the old flow and starts the new one automatically.
-        monitoringJob = _isSimulated
-            .flatMapLatest { useSimulated -> heartRateRepo.heartRateFlow(useSimulated) }
-            .onEach { reading ->
-                val current = _uiState.value as? HomeUiState.Monitoring ?: return@onEach
-
-                Log.d(TAG, "Reading — BPM=${reading.bpm.toInt()} HRV=${reading.hrv}ms SpO2=${reading.spo2}% Stress=${reading.stressIndex} sim=${reading.isSimulated}")
-
-                _uiState.value = current.copy(
-                    bpm = reading.bpm,
-                    hrv = reading.hrv,
-                    spo2 = reading.spo2,
-                    stressIndex = reading.stressIndex,
-                    isSimulated = reading.isSimulated
-                )
-
-                viewModelScope.launch {
-                    val bundle = SensorBundle(
-                        bpm = reading.bpm.toInt(),
-                        hrv = reading.hrv,
-                        spo2 = reading.spo2,
-                        stressIndex = reading.stressIndex,
-                        timestamp = reading.timestamp,
-                        isSimulated = reading.isSimulated
-                    )
-                    val result = wearDataSender.send(getApplication(), bundle)
-                    Log.d(TAG, "Send result — phoneReachable=$result readingsSent=${current.readingsSent + 1}")
-                    val updated = _uiState.value as? HomeUiState.Monitoring ?: return@launch
-                    _uiState.value = updated.copy(phoneReachable = result, readingsSent = updated.readingsSent + 1)
+        // collectLatest cancels the active branch whenever the source flips, so
+        // toggling Real/Fake mid-session hot-swaps without restarting.
+        monitoringJob = viewModelScope.launch {
+            _isSimulated.collectLatest { useSimulated ->
+                if (useSimulated) {
+                    // Fake: foreground simulation. Ensure background monitoring is off.
+                    runCatching { passiveManager.stop() }
+                    runSimulated()
+                } else {
+                    // Real: register background passive monitoring, then observe it.
+                    runCatching { passiveManager.start() }
+                        .onFailure { Log.e(TAG, "Failed to start passive monitoring", it) }
+                    observePassive()
                 }
             }
-            .launchIn(viewModelScope)
+        }
+    }
+
+    // Foreground simulated stream — the ViewModel both displays and sends.
+    private suspend fun runSimulated() {
+        heartRateRepo.simulatedFlow().collect { reading ->
+            val current = _uiState.value as? HomeUiState.Monitoring ?: return@collect
+            _uiState.value = current.copy(
+                bpm = reading.bpm,
+                hrv = reading.hrv,
+                spo2 = reading.spo2,
+                stressIndex = reading.stressIndex,
+                isSimulated = true,
+                isBackground = false
+            )
+            val bundle = SensorBundle(
+                bpm = reading.bpm.toInt(),
+                hrv = reading.hrv,
+                spo2 = reading.spo2,
+                stressIndex = reading.stressIndex,
+                timestamp = reading.timestamp,
+                isSimulated = true
+            )
+            val ok = wearDataSender.send(getApplication(), bundle)
+            val updated = _uiState.value as? HomeUiState.Monitoring ?: return@collect
+            _uiState.value = updated.copy(phoneReachable = ok, readingsSent = updated.readingsSent + 1)
+        }
+    }
+
+    // Real background stream — the PassiveDataService displays via the store and
+    // sends to the phone; here we only mirror the store into the UI state.
+    private suspend fun observePassive() {
+        combine(
+            PassiveHeartRateStore.latest,
+            PassiveHeartRateStore.readingsSent,
+            PassiveHeartRateStore.phoneReachable
+        ) { reading, sent, reachable -> Triple(reading, sent, reachable) }
+            .collect { (reading, sent, reachable) ->
+                val current = _uiState.value as? HomeUiState.Monitoring ?: return@collect
+                _uiState.value = current.copy(
+                    bpm = reading?.bpm,
+                    hrv = reading?.hrv,
+                    spo2 = reading?.spo2,
+                    stressIndex = reading?.stressIndex,
+                    readingsSent = sent,
+                    phoneReachable = reachable,
+                    isSimulated = false,
+                    isBackground = true
+                )
+            }
     }
 
     fun stopSession() {
         monitoringJob?.cancel()
         monitoringJob = null
+        // Explicit stop must end background monitoring too.
+        viewModelScope.launch { runCatching { passiveManager.stop() } }
         _uiState.value = HomeUiState.Idle
     }
 
     override fun onCleared() {
         super.onCleared()
+        // Cancel only the in-process collector. We deliberately do NOT stop
+        // passive monitoring here — that is what keeps real heart rate streaming
+        // to the phone after the app is backgrounded or closed.
         monitoringJob?.cancel()
     }
 }

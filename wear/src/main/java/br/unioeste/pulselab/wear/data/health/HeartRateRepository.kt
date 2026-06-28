@@ -1,30 +1,25 @@
 package br.unioeste.pulselab.wear.data.health
 
-import android.content.Context
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
-import android.util.Log
 import br.unioeste.pulselab.wear.model.HeartRateReading
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 
-private const val TAG = "HeartRateRepository"
-
-class HeartRateRepository(private val context: Context) {
+/**
+ * Simulated heart-rate source used for the "Fake" data toggle (foreground only).
+ *
+ * Real heart rate is read in the background via Health Services — see
+ * [PassiveMonitoringManager] and [PassiveDataService] — not through this class.
+ */
+class HeartRateRepository {
 
     companion object {
+        // Passive heart-rate monitoring still requires the BODY_SENSORS runtime
+        // permission, so the permission gate in the UI remains in effect.
         const val requiresSensorPermission = true
     }
 
-    fun heartRateFlow(useSimulated: Boolean): Flow<HeartRateReading> =
-        if (useSimulated) simulatedHeartRateFlow() else realHeartRateFlow()
-
-    private fun simulatedHeartRateFlow(): Flow<HeartRateReading> = flow {
+    fun simulatedFlow(): Flow<HeartRateReading> = flow {
         var bpm = 72.0
         while (true) {
             bpm = (bpm + (Math.random() - 0.5) * 2).coerceIn(65.0, 80.0)
@@ -38,55 +33,6 @@ class HeartRateRepository(private val context: Context) {
                 )
             )
             delay(1000L)
-        }
-    }
-
-    private fun realHeartRateFlow(): Flow<HeartRateReading> = callbackFlow {
-        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        val heartRateSensor = sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE)
-
-        if (heartRateSensor == null) {
-            Log.e(TAG, "No heart rate sensor found on this device")
-            close()
-            return@callbackFlow
-        }
-
-        val listener = object : SensorEventListener {
-            override fun onSensorChanged(event: SensorEvent) {
-                val bpm = event.values[0].toDouble()
-                if (bpm > 0) {
-                    trySend(
-                        HeartRateReading(
-                            bpm = bpm,
-                            hrv = null,
-                            spo2 = null,
-                            stressIndex = null,
-                            isSimulated = false
-                        )
-                    )
-                }
-            }
-            override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {
-                Log.d(TAG, "Heart rate sensor accuracy changed: $accuracy")
-            }
-        }
-
-        val registered = try {
-            sensorManager.registerListener(listener, heartRateSensor, SensorManager.SENSOR_DELAY_NORMAL)
-        } catch (e: SecurityException) {
-            Log.w(TAG, "BODY_SENSORS permission denied — real sensor unavailable", e)
-            close()
-            return@callbackFlow
-        }
-
-        if (!registered) {
-            Log.w(TAG, "SensorManager.registerListener returned false — sensor unavailable")
-            close()
-            return@callbackFlow
-        }
-
-        awaitClose {
-            sensorManager.unregisterListener(listener)
         }
     }
 }

@@ -5,6 +5,8 @@
     <!-- Required to read the heart rate sensor (must also be requested at runtime in code) -->
     <uses-permission android:name="android.permission.BODY_SENSORS" />
     <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />
+    <!-- Lets Health Services restart passive monitoring after a reboot -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-feature android:name="android.hardware.type.watch" />
 
     <application
@@ -28,6 +30,16 @@
         <meta-data
             android:name="com.google.android.wearable.standalone"
             android:value="true" />
+
+        <!--
+            Health Services binds to this service to deliver batched heart-rate
+            data even when the app is in the background or the process was killed.
+            The PASSIVE_DATA_BINDING permission ensures only Health Services can bind.
+        -->
+        <service
+            android:name=".data.health.PassiveDataService"
+            android:exported="true"
+            android:permission="com.google.android.wearable.healthservices.permission.PASSIVE_DATA_BINDING" />
 
         <activity
             android:name=".presentation.MainActivity"
