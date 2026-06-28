@@ -9,6 +9,7 @@ import br.unioeste.pulselab.wear.data.health.HeartRateRepository
 import br.unioeste.pulselab.wear.data.health.LiveMeasureMonitor
 import br.unioeste.pulselab.wear.data.health.PassiveHeartRateStore
 import br.unioeste.pulselab.wear.data.health.PassiveMonitoringManager
+import br.unioeste.pulselab.wear.data.health.SamsungSensorMonitor
 import br.unioeste.pulselab.wear.data.wearable.WearDataSender
 import br.unioeste.pulselab.wear.model.DataSource
 import br.unioeste.pulselab.wear.model.HeartRateReading
@@ -48,6 +49,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val heartRateRepo = HeartRateRepository()
     private val liveMonitor = LiveMeasureMonitor(application)
     private val passiveManager = PassiveMonitoringManager(application)
+    private val samsungMonitor = SamsungSensorMonitor(application)
     private val wearDataSender = WearDataSender()
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Idle)
@@ -102,6 +104,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     DataSource.SIMULATED -> {
                         runCatching { passiveManager.stop() }
                         collectForeground(heartRateRepo.simulatedFlow(), DataSource.SIMULATED)
+                    }
+                    DataSource.SENSOR -> {
+                        runCatching { passiveManager.stop() }
+                        collectForeground(samsungMonitor.readingFlow(), DataSource.SENSOR)
                     }
                     DataSource.BACKGROUND -> {
                         runCatching { passiveManager.start() }

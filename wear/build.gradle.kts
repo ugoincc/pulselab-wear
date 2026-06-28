@@ -44,6 +44,12 @@ android {
 }
 
 dependencies {
+    // Samsung Health Sensor SDK v1.4.1 — local .aar in wear/libs/.
+    // Unlocks HRV (IBI), SpO2 and skin temperature, which Jetpack Health
+    // Services cannot provide. Reads sensors directly on the watch; does not
+    // go through Health Connect. Requires Health Platform [Dev mode] on-device.
+    implementation(files("libs/samsung-health-sensor-api-1.4.1.aar"))
+
     // Wear OS + Compose
     implementation(libs.play.services.wearable)
     implementation(platform(libs.androidx.compose.bom))
@@ -73,6 +79,7 @@ dependencies {
     implementation(libs.androidx.health.services.client)
     implementation(libs.androidx.concurrent.futures.ktx)
 
+    testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
