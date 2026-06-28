@@ -1,23 +1,28 @@
 # PulseLab Wear
 
-A standalone Wear OS app that reads heart-rate (and simulated HRV / SpO₂ / stress)
-data on the watch and streams it to the PulseLab phone app over the Wear Data Layer.
+A standalone Wear OS app that reads heart rate, **HRV (RMSSD), SpO₂ and skin
+temperature** on the watch and streams them to the PulseLab phone app over the
+Wear Data Layer. HR comes from AndroidX Health Services; the other three are real
+readings from the **Samsung Health Sensor SDK**.
 
 ## Features
 
-- **Three live data sources**, cycled with one button (`DataSource` enum):
+- **Four selectable data sources**, cycled with one button (`DataSource` enum):
   - **Live** — Health Services `MeasureClient`: real heart rate, foreground only,
     per-second updates.
   - **Background** — Health Services `PassiveMonitoringClient`: real heart rate
     that keeps streaming to the phone even when the app is backgrounded, the
     screen is off, or the process was killed (`PassiveDataService` is bound by
     Health Services independently of the UI).
+  - **Sensor** — Samsung Health Sensor SDK: real **HR + IBI → HRV (RMSSD)**,
+    **SpO₂** and **skin temperature**, foreground. Reads the watch sensors
+    directly (see *Sensor source* below).
   - **Fake** — in-app simulated feed that fills *every* metric, for UI testing.
   - Switching is *live*: `collectLatest` on the source flag in `HomeViewModel`
-    cancels the active branch and starts the other without restarting the session.
+    cancels the active branch and starts the next without restarting the session.
 - **Debug metrics panel** — the home screen lists all five metrics every time
-  (see *Metric availability* below), showing either the value or a note about
-  where that value will eventually come from, plus raw debug fields
+  (see *Metric availability* below), showing either the value or a note about its
+  source/availability for the active source, plus raw debug fields
   (active source, readings sent, phone reachable, last-update timestamp).
 - **Phone streaming** of each reading as a `SensorBundle` over the Data Layer,
   with a connectivity indicator.
@@ -29,31 +34,36 @@ data on the watch and streams it to the PulseLab phone app over the Wear Data La
 | Live foreground HR (MeasureClient) | `data/health/LiveMeasureMonitor.kt` |
 | Background real HR (PassiveMonitoringClient) | `data/health/PassiveDataService.kt`, `data/health/PassiveMonitoringManager.kt` |
 | Service → UI bridge | `data/health/PassiveHeartRateStore.kt` |
+| Samsung SDK source (HRV/SpO₂/skin temp) | `data/health/SamsungSensorMonitor.kt`, `data/health/SensorConnectionManager.kt` |
+| HRV / RMSSD computation | `data/health/Hrv.kt` (`rmssd()` + `IbiWindow`) |
 | Simulated source (Fake mode) | `data/health/HeartRateRepository.kt` |
 | Metric/source model + availability map | `model/HealthMetric.kt`, `model/DataSource.kt` |
 | Phone transport | `data/wearable/WearDataSender.kt` |
 | State + flow wiring | `presentation/home/HomeViewModel.kt` |
 | UI (stateful + previewable stateless) | `presentation/home/HomeScreen.kt` |
 
-## Metric availability (the "plan ahead" reality)
+## Metric availability
 
-Only **heart rate** is available live through standard AndroidX Health Services.
-The other metrics are scaffolded in `HealthMetric` (each carries its `provider`
-string and a `wired` flag) and shown on screen, but are **not yet sourced** —
-they need APIs outside Health Services:
+Standard AndroidX Health Services only exposes **heart rate** live. Everything
+else is now sourced from the **Samsung Health Sensor SDK** in the **Sensor**
+source — it reads the watch sensors directly and gives us IBI (→ RMSSD), SpO₂ and
+skin temperature that Health Services cannot. **Stress** is the only metric still
+unsourced: it is Samsung-proprietary with no AOSP API, so we derive it offline
+from RMSSD rather than reading it live.
 
-| Metric | Live source today | Eventual source |
-|--------|-------------------|-----------------|
-| **HR** | ✅ MeasureClient / PassiveMonitoringClient | — |
-| **HRV** | ❌ | Compute from RR intervals, or Samsung Health Sensor SDK |
-| **SpO2** | ❌ | Samsung Health Sensor SDK (privileged); Health Connect for history |
-| **Skin Temp** | ❌ | Samsung Health Sensor SDK (live); Health Connect `SkinTemperatureRecord` (API 35+) |
-| **Stress** | ❌ | Samsung-proprietary (derived from HRV) — Samsung Health SDK, **no AOSP API** |
+| Metric | Live source today | Notes |
+|--------|-------------------|-------|
+| **HR** | ✅ Health Services (`MeasureClient` / `PassiveMonitoringClient`) **or** Samsung SDK | Samsung SDK's HR tracker also carries the IBI we need for HRV |
+| **HRV** | ✅ Samsung SDK — RMSSD computed from IBI (Sensor source) | `Hrv.kt`: sliding `IbiWindow`, IBIs filtered by status before RMSSD |
+| **SpO2** | ✅ Samsung SDK — `SPO2_ON_DEMAND`, re-armed every 60 s (Sensor source) | on-demand: one ~30 s measurement per arm, so we re-arm to keep it fresh |
+| **Skin Temp** | ✅ Samsung SDK — `SKIN_TEMPERATURE_CONTINUOUS` (Sensor source) | continuous, slower cadence than HR |
+| **Stress** | ❌ no live source | Samsung-proprietary; **derive offline from RMSSD** (no AOSP/SDK live API) |
 
-> The **Fake** source populates all five so the UI/pipeline can be exercised end
-> to end before the real sources exist. To actually wire HRV/SpO2/skin-temp/stress
-> you'll need the **Samsung Health Sensor SDK** (partner approval required) and/or
-> **Health Connect**; stress has no non-Samsung path.
+> Which metrics fill in depends on the **active source**: only the **Sensor**
+> source produces HRV/SpO₂/skin temp; **Live**/**Background** fill HR only; **Fake**
+> populates all five so the UI/pipeline can be exercised without a watch. A
+> per-device **capability check** is the definitive gate — the Sensor source only
+> starts the trackers this particular watch reports as supported.
 
 ### How background monitoring works
 
@@ -80,6 +90,36 @@ they need APIs outside Health Services:
 > **Permission note:** passive HR needs `BODY_SENSORS`, and uninterrupted
 > background delivery needs `BODY_SENSORS_BACKGROUND` — set the app's body-sensors
 > permission to **"Allow all the time"** in watch Settings for best reliability.
+
+### Sensor source (Samsung Health Sensor SDK)
+
+The **Sensor** source (`SamsungSensorMonitor`) connects to the Samsung Health
+Platform on the watch and exposes a single `Flow<HeartRateReading>` that slots
+into the same foreground collector + `WearDataSender` path as the other sources —
+no new transport.
+
+1. `SensorConnectionManager` connects to the Health Platform, then runs a
+   **capability check** — the definitive gate. Only trackers this watch reports
+   as supported are started.
+2. **HR + IBI** (`HEART_RATE_CONTINUOUS`, ~1 Hz) is the driver. Valid IBIs feed a
+   sliding `IbiWindow`; each HR emission carries the window's current **RMSSD** as
+   HRV. IBIs are filtered by status first — bad IBIs inflate RMSSD.
+3. **SpO₂** (`SPO2_ON_DEMAND`) is on-demand: one ~30 s measurement per arm, so it
+   is **re-armed every 60 s**. Only one on-demand tracker may run at a time.
+4. **Skin temperature** (`SKIN_TEMPERATURE_CONTINUOUS`) runs continuously at a
+   slower cadence. SpO₂ and skin-temp update "latest" values that ride along on
+   the next HR emission.
+5. On `awaitClose` (source switched / session stopped) every tracker is
+   `unsetEventListener()`'d and the service disconnected — no leak.
+
+> **Status codes are per-metric and runtime-validated** (not in the `.aar`):
+> confirmed on-device (SM-L705F) — HR valid `1`, off-body `-3`, SpO₂ completed
+> `2`, skin-temp valid `0`. Off-body HR (`-3`) is dropped.
+
+> **Requires Health Platform dev mode** on the watch (Settings → Apps → Health
+> Platform → tap the title ~10× until `[Dev mode]` shows). Without it the SDK
+> returns `SDK_POLICY_ERROR`. The SDK does **not** run on an emulator. See
+> `HANDOFF-samsung-sensor-sdk.md` for the full setup checklist.
 
 ## Decisions & gotchas (project memory)
 
@@ -145,4 +185,8 @@ References:
 
 On the watch: open the app → **Start** → grant the heart-rate permission →
 wait ~10s for the optical sensor to lock on (loose fit or off-wrist yields no
-reading). Use the **Source** button to switch between real and fake data.
+reading). Use the **Source** button to cycle Live → Background → Fake → Sensor.
+
+The **Sensor** source additionally needs Health Platform **dev mode** enabled on
+the watch (see *Sensor source* above) and a physical device — it does not work on
+an emulator.
