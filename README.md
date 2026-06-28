@@ -5,15 +5,20 @@ data on the watch and streams it to the PulseLab phone app over the Wear Data La
 
 ## Features
 
-- **Background heart-rate monitoring** via Health Services'
-  `PassiveMonitoringClient`. Real heart rate keeps streaming to the phone even
-  when the app is backgrounded, the screen is off, or the process was killed —
-  Health Services binds to `PassiveDataService` independently of the UI.
-- **Real / Fake data source toggle** — a button on the home screen switches
-  between real (background passive monitoring) and a simulated foreground feed.
-  Switching is *live*: `collectLatest` on the source flag in `HomeViewModel`
-  cancels the active branch and starts the other without restarting the session.
-  Fake readings are tagged `(SIM)` on screen.
+- **Three live data sources**, cycled with one button (`DataSource` enum):
+  - **Live** — Health Services `MeasureClient`: real heart rate, foreground only,
+    per-second updates.
+  - **Background** — Health Services `PassiveMonitoringClient`: real heart rate
+    that keeps streaming to the phone even when the app is backgrounded, the
+    screen is off, or the process was killed (`PassiveDataService` is bound by
+    Health Services independently of the UI).
+  - **Fake** — in-app simulated feed that fills *every* metric, for UI testing.
+  - Switching is *live*: `collectLatest` on the source flag in `HomeViewModel`
+    cancels the active branch and starts the other without restarting the session.
+- **Debug metrics panel** — the home screen lists all five metrics every time
+  (see *Metric availability* below), showing either the value or a note about
+  where that value will eventually come from, plus raw debug fields
+  (active source, readings sent, phone reachable, last-update timestamp).
 - **Phone streaming** of each reading as a `SensorBundle` over the Data Layer,
   with a connectivity indicator.
 
@@ -21,12 +26,34 @@ data on the watch and streams it to the PulseLab phone app over the Wear Data La
 
 | Layer | File |
 |-------|------|
-| Background real HR (Health Services) | `data/health/PassiveDataService.kt`, `data/health/PassiveMonitoringManager.kt` |
+| Live foreground HR (MeasureClient) | `data/health/LiveMeasureMonitor.kt` |
+| Background real HR (PassiveMonitoringClient) | `data/health/PassiveDataService.kt`, `data/health/PassiveMonitoringManager.kt` |
 | Service → UI bridge | `data/health/PassiveHeartRateStore.kt` |
 | Simulated source (Fake mode) | `data/health/HeartRateRepository.kt` |
+| Metric/source model + availability map | `model/HealthMetric.kt`, `model/DataSource.kt` |
 | Phone transport | `data/wearable/WearDataSender.kt` |
 | State + flow wiring | `presentation/home/HomeViewModel.kt` |
 | UI (stateful + previewable stateless) | `presentation/home/HomeScreen.kt` |
+
+## Metric availability (the "plan ahead" reality)
+
+Only **heart rate** is available live through standard AndroidX Health Services.
+The other metrics are scaffolded in `HealthMetric` (each carries its `provider`
+string and a `wired` flag) and shown on screen, but are **not yet sourced** —
+they need APIs outside Health Services:
+
+| Metric | Live source today | Eventual source |
+|--------|-------------------|-----------------|
+| **HR** | ✅ MeasureClient / PassiveMonitoringClient | — |
+| **HRV** | ❌ | Compute from RR intervals, or Samsung Health Sensor SDK |
+| **SpO2** | ❌ | Samsung Health Sensor SDK (privileged); Health Connect for history |
+| **Skin Temp** | ❌ | Samsung Health Sensor SDK (live); Health Connect `SkinTemperatureRecord` (API 35+) |
+| **Stress** | ❌ | Samsung-proprietary (derived from HRV) — Samsung Health SDK, **no AOSP API** |
+
+> The **Fake** source populates all five so the UI/pipeline can be exercised end
+> to end before the real sources exist. To actually wire HRV/SpO2/skin-temp/stress
+> you'll need the **Samsung Health Sensor SDK** (partner approval required) and/or
+> **Health Connect**; stress has no non-Samsung path.
 
 ### How background monitoring works
 
@@ -44,10 +71,11 @@ data on the watch and streams it to the PulseLab phone app over the Wear Data La
 4. On next launch, if the persisted flag says a background session is active, the
    ViewModel resumes showing it so the user can stop it.
 
-> **Trade-off:** passive data is batched and lower-frequency than a foreground
-> sensor stream, so the on-screen number updates less often in Real mode than in
-> Fake mode. For snappy real-time display *while the app is open*, add Health
-> Services `MeasureClient` as a foreground companion (future enhancement).
+> **Trade-off:** passive (Background) data is batched and lower-frequency than a
+> foreground stream, so the number updates less often than in **Live** mode. The
+> two are deliberately separate selectable sources here for debug clarity; a
+> production build would run **Live (MeasureClient) in the foreground and
+> Background (Passive) when the app leaves the foreground** simultaneously.
 
 > **Permission note:** passive HR needs `BODY_SENSORS`, and uninterrupted
 > background delivery needs `BODY_SENSORS_BACKGROUND` — set the app's body-sensors

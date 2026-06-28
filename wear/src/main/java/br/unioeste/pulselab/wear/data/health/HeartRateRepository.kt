@@ -29,6 +29,7 @@ class HeartRateRepository {
                     hrv = (40..60).random(),
                     spo2 = (97..99).random(),
                     stressIndex = (20..40).random(),
+                    skinTemp = 31.0 + Math.random() * 3.0,
                     isSimulated = true
                 )
             )

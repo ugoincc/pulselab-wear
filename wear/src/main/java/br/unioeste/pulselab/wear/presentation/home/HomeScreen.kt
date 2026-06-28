@@ -9,6 +9,7 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.graphics.Color
@@ -29,6 +30,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import br.unioeste.pulselab.wear.BuildConfig
 import br.unioeste.pulselab.wear.data.health.HeartRateRepository
+import br.unioeste.pulselab.wear.model.DataSource
+import br.unioeste.pulselab.wear.model.HealthMetric
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.AppScaffold
@@ -80,14 +83,14 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     if (hasPermission) {
         val uiState by viewModel.uiState.collectAsState()
         val isPhoneConnected by viewModel.isPhoneConnected.collectAsState()
-        val isSimulated by viewModel.isSimulated.collectAsState()
+        val source by viewModel.source.collectAsState()
         HomeScreenContent(
             uiState = uiState,
             isPhoneConnected = isPhoneConnected,
-            isSimulated = isSimulated,
+            source = source,
             onStart = { viewModel.startSession() },
             onStop  = { viewModel.stopSession() },
-            onToggleDataSource = { viewModel.toggleDataSource() }
+            onCycleSource = { viewModel.cycleDataSource() }
         )
     } else {
         BodySensorsRationaleScreen(
@@ -148,15 +151,24 @@ private fun BodySensorsRationaleScreen(
     }
 }
 
+// Resolve a metric to its current display value from the Monitoring state.
+private fun HomeUiState.Monitoring.valueFor(metric: HealthMetric): String? = when (metric) {
+    HealthMetric.HEART_RATE -> bpm?.let { "%.0f".format(it) }
+    HealthMetric.HRV -> hrv?.toString()
+    HealthMetric.SPO2 -> spo2?.toString()
+    HealthMetric.SKIN_TEMP -> skinTemp?.let { "%.1f".format(it) }
+    HealthMetric.STRESS -> stressIndex?.toString()
+}
+
 // ─── STATELESS CONTENT ──────────────────────────────────────────────────────
 @Composable
 fun HomeScreenContent(
     uiState: HomeUiState,
     isPhoneConnected: Boolean = false,
-    isSimulated: Boolean = false,
+    source: DataSource = DataSource.LIVE,
     onStart: () -> Unit,
     onStop: () -> Unit,
-    onToggleDataSource: () -> Unit = {}
+    onCycleSource: () -> Unit = {}
 ) {
     AppScaffold {
         val listState = rememberTransformingLazyColumnState()
@@ -182,98 +194,66 @@ fun HomeScreenContent(
                     }
                 }
 
+                // Source selector — visible in every state for quick debug switching.
+                item {
+                    Button(onClick = onCycleSource, modifier = Modifier.fillMaxWidth()) {
+                        Text("Source: ${source.label}")
+                    }
+                }
+
                 when (val state = uiState) {
 
                     is HomeUiState.Idle -> {
                         item {
                             Text(
-                                text = "Ready",
-                                style = MaterialTheme.typography.titleLarge
-                            )
-                        }
-                        item {
-                            Text(
-                                text = "Press Start to begin",
+                                text = "Ready — press Start",
                                 style = MaterialTheme.typography.bodyMedium
                             )
-                        }
-                        item {
-                            Button(
-                                onClick = onToggleDataSource,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(if (isSimulated) "Source: Fake" else "Source: Real")
-                            }
                         }
                     }
 
                     is HomeUiState.Monitoring -> {
+                        // Every metric, every time — value or a "where it comes from" note.
                         item {
-                            Text(
-                                text = buildString {
-                                    append("HR: ")
-                                    append(state.bpm?.let { "%.0f".format(it) } ?: "...")
-                                    append(" BPM")
-                                    if (state.isSimulated) append(" (SIM)")
-                                },
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                        item {
-                            Text(
-                                text = "HRV: ${state.hrv?.toString() ?: "..."} ms",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                        item {
-                            Text(
-                                text = "SpO2: ${state.spo2?.toString() ?: "..."} %",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                        item {
-                            Text(
-                                text = "Stress: ${state.stressIndex?.toString() ?: "..."} / 100",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                        item {
-                            Button(
-                                onClick = onToggleDataSource,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(if (state.isSimulated) "Source: Fake" else "Source: Real")
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                HealthMetric.entries.forEach { metric ->
+                                    val value = state.valueFor(metric)
+                                    Text(
+                                        text = "${metric.label}: ${value ?: "—"} ${metric.unit}",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    if (value == null) {
+                                        Text(
+                                            text = "↳ ${metric.provider}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                             }
                         }
-                        if (state.isBackground) {
-                            item {
+
+                        // Debug block.
+                        item {
+                            Column(modifier = Modifier.fillMaxWidth()) {
                                 Text(
-                                    text = "● Streaming in background",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF4CAF50)
+                                    text = "source=${state.source.badge}  sent=${state.readingsSent}",
+                                    style = MaterialTheme.typography.labelSmall
                                 )
-                            }
-                        }
-                        item {
-                            Text(
-                                text = "Sent: ${state.readingsSent}",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                        if (state.phoneReachable != null) {
-                            item {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.PhoneAndroid,
-                                        contentDescription = "Phone connection",
-                                        tint = if (state.phoneReachable)
-                                            MaterialTheme.colorScheme.primary
-                                        else
-                                            MaterialTheme.colorScheme.error
+                                Text(
+                                    text = "phoneReachable=${state.phoneReachable}",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                                Text(
+                                    text = "lastUpdate=${state.lastUpdate ?: "—"}",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                                if (state.source == DataSource.BACKGROUND) {
+                                    Text(
+                                        text = "● streaming in background",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFF4CAF50)
                                     )
                                 }
                             }
@@ -327,19 +307,14 @@ fun PreviewIdle() {
 
 @WearPreviewDevices
 @Composable
-fun PreviewIdleSimulated() {
-    HomeScreenContent(uiState = HomeUiState.Idle, isSimulated = true, onStart = {}, onStop = {})
-}
-
-@WearPreviewDevices
-@Composable
-fun PreviewMonitoring() {
+fun PreviewMonitoringLive() {
     HomeScreenContent(
         uiState = HomeUiState.Monitoring(
-            bpm = 78.0, hrv = null, spo2 = null, stressIndex = null,
-            sessionId = "preview", readingsSent = 12, isSimulated = false,
-            isBackground = true
+            bpm = 78.0, hrv = null, spo2 = null, stressIndex = null, skinTemp = null,
+            sessionId = "preview-live", readingsSent = 12,
+            source = DataSource.LIVE, phoneReachable = true, lastUpdate = 1_700_000_000_000L
         ),
+        source = DataSource.LIVE,
         onStart = {},
         onStop = {}
     )
@@ -350,10 +325,11 @@ fun PreviewMonitoring() {
 fun PreviewMonitoringSimulated() {
     HomeScreenContent(
         uiState = HomeUiState.Monitoring(
-            bpm = 72.0, hrv = 48, spo2 = 98, stressIndex = 25,
-            sessionId = "preview-sim", readingsSent = 7, isSimulated = true
+            bpm = 72.0, hrv = 48, spo2 = 98, stressIndex = 25, skinTemp = 32.4,
+            sessionId = "preview-sim", readingsSent = 7,
+            source = DataSource.SIMULATED, phoneReachable = true, lastUpdate = 1_700_000_000_000L
         ),
-        isSimulated = true,
+        source = DataSource.SIMULATED,
         onStart = {},
         onStop = {}
     )
@@ -361,13 +337,14 @@ fun PreviewMonitoringSimulated() {
 
 @WearPreviewDevices
 @Composable
-fun PreviewMonitoringNoPhone() {
+fun PreviewMonitoringBackgroundNoPhone() {
     HomeScreenContent(
         uiState = HomeUiState.Monitoring(
-            bpm = 72.0, hrv = 42, spo2 = 97, stressIndex = 55,
-            sessionId = "preview-no-phone", readingsSent = 3,
-            phoneReachable = false
+            bpm = 71.0, hrv = null, spo2 = null, stressIndex = null, skinTemp = null,
+            sessionId = "preview-bg", readingsSent = 3,
+            source = DataSource.BACKGROUND, phoneReachable = false
         ),
+        source = DataSource.BACKGROUND,
         onStart = {},
         onStop = {}
     )
