@@ -203,3 +203,28 @@ Ralph progress log — ralph/sensor-capability-debug-screen
     for ECG/BIA, not both modes), US-007's UI only needs to render 9 rows with
     no special-casing for "metrics with two modes."
 ---
+
+## [2026-07-06] - US-006
+- Implemented SensorCapabilityViewModel in br.unioeste.pulselab.wear.presentation.debug
+  as an AndroidViewModel wrapping DebugSensorRegistry: constructs the registry,
+  calls registry.connect() in init, exposes registry.uiState directly as
+  uiState: StateFlow<List<DebugMetricState>>, forwards onTrigger(metricId) to
+  registry.trigger(metricId), and calls registry.disconnect() in onCleared().
+- No logic duplicated from the registry — the ViewModel is purely lifecycle
+  wiring + passthrough, as anticipated in the US-005 learnings.
+- Did not touch HomeViewModel.kt or HomeUiState.
+- Files changed (new):
+  wear/src/main/java/br/unioeste/pulselab/wear/presentation/debug/SensorCapabilityViewModel.kt
+- Verified with `./gradlew :wear:compileDebugKotlin -q` — compiles clean.
+- **Learnings for future iterations:**
+  - US-007 (SensorCapabilityScreen UI) can instantiate this ViewModel the same
+    way HomeViewModel is instantiated (check how HomeViewModel is provided to
+    its Composable/Activity, e.g. viewModel() factory or ViewModelProvider) —
+    SensorCapabilityViewModel follows the identical AndroidViewModel(application)
+    constructor shape so no custom factory should be needed beyond what's
+    already used for HomeViewModel.
+  - uiState rows carry isOnDemand — US-007 should gate the "trigger" button
+    per row on that flag (continuous metrics have no trigger button) and map
+    DebugMetricStatus to whatever visual treatment (color/label) the design
+    calls for.
+---
