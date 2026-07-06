@@ -116,3 +116,47 @@ Ralph progress log — ralph/sensor-capability-debug-screen
     8 fields US-003 asked for) — map only what the AC specifies, don't
     speculatively add the rest.
 ---
+
+## [2026-07-06] - US-004
+- Implemented EdaTracker, AccelerometerTracker, SweatLossTracker in
+  br.unioeste.pulselab.wear.data.health.debug, each a SensorTracker<T> using
+  callbackFlow, mirroring BiaTracker.kt's listener/awaitClose shape.
+- Decompiled the SDK's HealthTrackerType enum again (javap on
+  wear/libs/samsung-health-sensor-api-1.4.1.aar's classes.jar) to confirm:
+  EDA only has EDA_CONTINUOUS (no bare EDA, no on-demand); ACCELEROMETER and
+  ACCELEROMETER_CONTINUOUS both exist; SWEAT_LOSS has no continuous or
+  on-demand variant at all — just the one bare type.
+- EdaTracker reads HealthTrackerType.EDA_CONTINUOUS only, always continuous,
+  no constructor flag needed (matches SweatLossTracker's simplicity).
+- AccelerometerTracker takes a constructor `useContinuousType: Boolean = true`
+  flag to pick ACCELEROMETER_CONTINUOUS (default) vs ACCELEROMETER, but
+  isContinuous is true for both — per AC both variants are "continuous-type"
+  (no manual on-demand trigger), the flag just lets callers pick which SDK
+  type instance to read from if ever needed.
+- AccelerometerReading has no status field: javap confirmed
+  ValueKey.AccelerometerSet only has ACCELEROMETER_X/Y/Z, no STATUS (unlike
+  EdaSet/SweatLossSet which both have STATUS alongside their one value field).
+- SweatLossTracker reads HealthTrackerType.SWEAT_LOSS only, always continuous.
+- Files changed (all new):
+  wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/EdaTracker.kt
+  wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/AccelerometerTracker.kt
+  wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/SweatLossTracker.kt
+- Did not modify SamsungSensorMonitor.kt, SensorConnectionManager.kt, or Hrv.kt.
+- Verified with `./gradlew :wear:compileDebugKotlin -q` — compiles clean.
+- **Learnings for future iterations:**
+  - Not every ValueKey set has a STATUS field — AccelerometerSet is the first
+    one encountered without it; check javap output per set rather than
+    assuming the BODY_FAT/BIA-style "value + STATUS" shape always applies.
+  - This completes all 9 individual tracker classes (US-002/003/004). US-005
+    (DebugSensorRegistry) should now enumerate: EcgTracker, EcgTracker(onDemand=true),
+    PpgGreenTracker, PpgRedTracker, PpgIrTracker, BiaTracker(onDemand=false),
+    BiaTracker() [on-demand default], MfBiaTracker, EdaTracker,
+    AccelerometerTracker, SweatLossTracker — note that's 11 instances across
+    9 "metrics" per the PRD description (ECG and BIA each cover two tracker
+    instances/modes under one metric row) — US-005/US-007 should decide how
+    to group continuous+on-demand pairs into a single DebugMetricState row
+    vs separate rows; the PRD's "9 metrics" count (ECG, PPG green/red/ir, BIA,
+    MF-BIA, EDA, accelerometer, sweat loss) suggests one row per metric name,
+    not per tracker instance, so ECG's two instances and BIA's two instances
+    likely need to collapse into one row each with mode-switching logic.
+---
