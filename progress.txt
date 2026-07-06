@@ -33,3 +33,47 @@ Ralph progress log — ralph/sensor-capability-debug-screen
   - See Codebase Patterns above for the branch-base gotcha and the tracker
     capability-gate pattern to reuse in US-002/003/004.
 ---
+
+## [2026-07-06] - US-002
+- Implemented EcgTracker, PpgGreenTracker, PpgRedTracker, PpgIrTracker in
+  br.unioeste.pulselab.wear.data.health.debug, each a SensorTracker<T> using
+  callbackFlow, mirroring SamsungSensorMonitor.kt's listener/awaitClose shape.
+- EcgTracker takes a constructor `onDemand: Boolean` flag: false → trackerType
+  ECG (continuous, keeps emitting), true → ECG_ON_DEMAND (emits one EcgReading
+  then closes the flow, matching the "on-demand completes after one reading"
+  contract documented on SensorTracker.readingFlow). Decompiled the SDK's
+  HealthTrackerType enum (javap on wear/libs/samsung-health-sensor-api-1.4.1.aar's
+  classes.jar) to confirm there is no ECG_CONTINUOUS — plain ECG is the
+  continuous variant, paired with ECG_ON_DEMAND.
+- PpgGreenTracker/PpgRedTracker/PpgIrTracker read HealthTrackerType.PPG_GREEN/
+  PPG_RED/PPG_IR (decompiled confirmed: these three have no on-demand variant
+  in the SDK, only the unrelated generic PPG_CONTINUOUS/PPG_ON_DEMAND types
+  which use a combined ValueKey.PpgSet — not used here per PRD, which wants
+  PpgGreenSet/PpgRedSet/PpgIrSet instead). All three are continuous-only, so
+  they start/stop with the caller's flow lifecycle; no on-demand handling
+  needed for them in this story.
+- Shared PpgReading(value, status, timestamp) data class covers all three PPG
+  channels since PpgGreenSet/PpgRedSet/PpgIrSet all have the identical
+  (channel value, STATUS) shape — avoided three near-identical data classes.
+- Files changed (all new):
+  wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/EcgTracker.kt
+  wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/PpgTrackers.kt
+- Did not modify SamsungSensorMonitor.kt, SensorConnectionManager.kt, or Hrv.kt.
+- Verified with `./gradlew :wear:compileDebugKotlin -q` — compiles clean.
+- **Learnings for future iterations:**
+  - To inspect exact ValueKey field names / HealthTrackerType members for a
+    Samsung SDK version, unzip the .aar, unzip classes.jar, then
+    `javap -p` the .class file — faster and more reliable than guessing from
+    docs. No decompiled sources are checked into the repo.
+  - HealthTrackerType has some tracker families with only a continuous+on-demand
+    pair (HEART_RATE/HEART_RATE_CONTINUOUS, SPO2/SPO2_ON_DEMAND) and others with
+    just a bare continuous type + separate _ON_DEMAND (ECG/ECG_ON_DEMAND, no
+    ECG_CONTINUOUS) — don't assume a `_CONTINUOUS` suffix always exists; check
+    the actual enum.
+  - For a tracker class that must represent two trackerTypes (continuous vs
+    on-demand) under one SensorTracker<T> interface (single non-parameterized
+    trackerType), use a constructor flag to pick the type/isContinuous pair
+    rather than extending the interface — keeps DebugSensorRegistry (US-005)
+    able to just instantiate two SensorTracker instances (e.g. EcgTracker() and
+    EcgTracker(onDemand = true)) without special-casing.
+---
