@@ -77,3 +77,42 @@ Ralph progress log — ralph/sensor-capability-debug-screen
     able to just instantiate two SensorTracker instances (e.g. EcgTracker() and
     EcgTracker(onDemand = true)) without special-casing.
 ---
+
+## [2026-07-06] - US-003
+- Implemented BiaTracker and MfBiaTracker in br.unioeste.pulselab.wear.data.health.debug,
+  each a SensorTracker<T> using callbackFlow, mirroring EcgTracker.kt's
+  listener/awaitClose/on-demand-completes-after-one-reading shape.
+- BiaTracker takes a constructor `onDemand: Boolean = true` flag (defaults to
+  on-demand, unlike EcgTracker's default-false, since BIA is meant to be
+  triggered explicitly per AC): true → BIA_ON_DEMAND (emits one BiaReading then
+  closes), false → BIA (continuous, keeps emitting). Decompiled the SDK's
+  HealthTrackerType enum (javap on wear/libs/samsung-health-sensor-api-1.4.1.aar)
+  to confirm both BIA and BIA_ON_DEMAND exist.
+- MfBiaTracker only reads HealthTrackerType.MF_BIA_ON_DEMAND — decompiled
+  confirmed there is no MF_BIA continuous variant in the SDK, so this class has
+  no onDemand constructor flag; isContinuous is always false and the flow
+  always closes after the first reading.
+- BiaReading maps ValueKey.BiaSet's BODY_FAT_RATIO/BODY_FAT_MASS/
+  TOTAL_BODY_WATER/SKELETAL_MUSCLE_RATIO/SKELETAL_MUSCLE_MASS/
+  BASAL_METABOLIC_RATE/PROGRESS/STATUS per the PRD (BiaSet also has
+  FAT_FREE_RATIO/FAT_FREE_MASS/BODY_IMPEDANCE_MAGNITUDE/BODY_IMPEDANCE_DEGREE
+  in the SDK, not required by this story's AC — omitted from the data class).
+- MfBiaReading maps ValueKey.MfBiaSet's impedance magnitude/phase pairs at
+  5K/10K/50K/250K plus PROGRESS/STATUS.
+- Files changed (all new):
+  wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/BiaTracker.kt
+  wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/MfBiaTracker.kt
+- Did not modify SamsungSensorMonitor.kt, SensorConnectionManager.kt, or Hrv.kt.
+- Verified with `./gradlew :wear:compileDebugKotlin -q` — compiles clean.
+- **Learnings for future iterations:**
+  - Not every "X + X_ON_DEMAND" pair in the AC actually has a continuous SDK
+    type: MF_BIA only has an on-demand variant (MF_BIA_ON_DEMAND), no
+    MF_BIA_CONTINUOUS or bare MF_BIA — always decompile-check per tracker
+    family rather than assuming the constructor-flag pattern from EcgTracker
+    applies everywhere.
+  - ValueKey data-set classes in this SDK version often contain more fields
+    than a given user story's AC lists (e.g. BiaSet has FAT_FREE_RATIO/
+    FAT_FREE_MASS/BODY_IMPEDANCE_MAGNITUDE/BODY_IMPEDANCE_DEGREE beyond the
+    8 fields US-003 asked for) — map only what the AC specifies, don't
+    speculatively add the rest.
+---
