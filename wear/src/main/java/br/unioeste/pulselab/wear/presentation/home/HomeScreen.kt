@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +33,7 @@ import br.unioeste.pulselab.wear.BuildConfig
 import br.unioeste.pulselab.wear.data.health.HeartRateRepository
 import br.unioeste.pulselab.wear.model.DataSource
 import br.unioeste.pulselab.wear.model.HealthMetric
+import br.unioeste.pulselab.wear.presentation.debug.SensorCapabilityScreen
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.AppScaffold
@@ -50,6 +52,14 @@ import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
 
 @Composable
 fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
+    var showDebugScreen by remember { mutableStateOf(false) }
+
+    if (showDebugScreen) {
+        BackHandler { showDebugScreen = false }
+        SensorCapabilityScreen()
+        return
+    }
+
     val context = LocalContext.current
 
     var hasPermission by remember {
@@ -90,7 +100,8 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
             source = source,
             onStart = { viewModel.startSession() },
             onStop  = { viewModel.stopSession() },
-            onCycleSource = { viewModel.cycleDataSource() }
+            onCycleSource = { viewModel.cycleDataSource() },
+            onOpenDebug = { showDebugScreen = true }
         )
     } else {
         BodySensorsRationaleScreen(
@@ -168,7 +179,9 @@ fun HomeScreenContent(
     source: DataSource = DataSource.LIVE,
     onStart: () -> Unit,
     onStop: () -> Unit,
-    onCycleSource: () -> Unit = {}
+    onCycleSource: () -> Unit = {},
+    showDebugEntry: Boolean = BuildConfig.DEBUG,
+    onOpenDebug: () -> Unit = {}
 ) {
     AppScaffold {
         val listState = rememberTransformingLazyColumnState()
@@ -283,6 +296,14 @@ fun HomeScreenContent(
                     }
                 }
 
+                if (showDebugEntry) {
+                    item {
+                        Button(onClick = onOpenDebug, modifier = Modifier.fillMaxWidth()) {
+                            Text("Debug: Sensor Capabilities")
+                        }
+                    }
+                }
+
                 item {
                     Text(
                         text = "v${BuildConfig.VERSION_NAME}",
@@ -357,5 +378,29 @@ fun PreviewError() {
         uiState = HomeUiState.Error("Could not reach server"),
         onStart = {},
         onStop = {}
+    )
+}
+
+@WearPreviewDevices
+@Composable
+fun PreviewDebugEntryVisible() {
+    HomeScreenContent(
+        uiState = HomeUiState.Idle,
+        onStart = {},
+        onStop = {},
+        showDebugEntry = true,
+        onOpenDebug = {}
+    )
+}
+
+@WearPreviewDevices
+@Composable
+fun PreviewDebugEntryHiddenInRelease() {
+    HomeScreenContent(
+        uiState = HomeUiState.Idle,
+        onStart = {},
+        onStop = {},
+        showDebugEntry = false,
+        onOpenDebug = {}
     )
 }
