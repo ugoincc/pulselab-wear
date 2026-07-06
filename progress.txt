@@ -1,0 +1,35 @@
+Ralph progress log — ralph/sensor-capability-debug-screen
+
+## Codebase Patterns
+- The PRD's ralph branch must be created from feature/samsung-sensor-sdk, not main:
+  main (40c04a2) predates the Samsung Health Sensor SDK integration, so it lacks
+  SamsungSensorMonitor.kt / SensorConnectionManager.kt / Hrv.kt that this PRD's
+  debug trackers depend on. Branch ralph/sensor-capability-debug-screen was cut
+  from feature/samsung-sensor-sdk instead.
+- New debug-only sensor code lives in br.unioeste.pulselab.wear.data.health.debug,
+  separate package from br.unioeste.pulselab.wear.data.health so existing production
+  monitor/connection files are never touched.
+- SensorTracker<T> (data/health/debug/SensorTracker.kt) is the shared interface:
+  trackerType (HealthTrackerType), isContinuous flag, isSupported(connection)
+  default method checking connection.supportedTypes(), and
+  readingFlow(connection): Flow<T>. Each new tracker class implements this.
+- Capability-gate pattern to copy for every tracker (from SamsungSensorMonitor.kt:157-187):
+  check `type in connection.supportedTypes()` before calling connection.tracker(type),
+  log a warning and skip otherwise. Never assume a tracker type is available.
+- Verification for this project's non-UI Kotlin classes: `./gradlew :wear:compileDebugKotlin -q`
+  is enough — no device/emulator needed until UI stories (US-007/US-008) which
+  require @WearPreviewDevices previews instead.
+
+## [2026-07-06] - US-001
+- Implemented shared SensorTracker<T> interface in new package
+  br.unioeste.pulselab.wear.data.health.debug, defining trackerType, isContinuous,
+  isSupported(connection) and readingFlow(connection): Flow<T>.
+- Files changed: wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/SensorTracker.kt (new)
+- Did not modify SamsungSensorMonitor.kt, SensorConnectionManager.kt, or Hrv.kt.
+- Branch ralph/sensor-capability-debug-screen created from feature/samsung-sensor-sdk
+  (not main — main lacks the Samsung SDK files this PRD builds on).
+- Verified with `./gradlew :wear:compileDebugKotlin -q` — compiles clean.
+- **Learnings for future iterations:**
+  - See Codebase Patterns above for the branch-base gotcha and the tracker
+    capability-gate pattern to reuse in US-002/003/004.
+---
