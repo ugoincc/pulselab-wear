@@ -160,3 +160,46 @@ Ralph progress log — ralph/sensor-capability-debug-screen
     not per tracker instance, so ECG's two instances and BIA's two instances
     likely need to collapse into one row each with mode-switching logic.
 ---
+
+## [2026-07-06] - US-005
+- Implemented DebugSensorRegistry in br.unioeste.pulselab.wear.data.health.debug: owns
+  one SensorConnectionManager connection, holds all 9 metric rows (ECG, PPG
+  green/red/ir, BIA, MF-BIA, EDA, accelerometer, sweat loss), exposes
+  StateFlow<List<DebugMetricState>>.
+- Design decision on the "11 instances vs 9 metrics" question flagged at the
+  end of US-004: ECG and BIA are each represented by ONE tracker instance in
+  the registry — their on-demand variant (EcgTracker(onDemand = true),
+  BiaTracker(onDemand = true)) — not both continuous+on-demand instances.
+  This gives exactly one trigger-driven row per PRD metric name (9 rows total)
+  instead of 11, and matches the PRD description's "9 metrics" framing. The
+  continuous ECG/BIA types are simply never instantiated by the registry.
+- DebugMetricStatus enum: UNAVAILABLE / READY / READING / DONE / ERROR.
+  - Continuous trackers (PPG x3, EDA, accelerometer, sweat loss): start
+    automatically in connection.onConnected if supported; status flips
+    READY -> READING on first (and every subsequent) reading — "Reading"
+    doubles as "live/streaming" for continuous metrics since their flow never
+    completes.
+  - On-demand trackers (ECG, BIA, MF-BIA): stay READY until trigger(metricId)
+    is called, then READING until the flow's single reading arrives, then DONE.
+- Serialization: trigger() checks `_uiState.value.any { it.status == READING }`
+  and rejects (logs a warning, no-op) if any metric is already Reading —
+  satisfies the "on-demand triggers are serialized" AC without a queue, since
+  the PRD allows "rejected or queued".
+- Per-metric formatting done via a `format: (Any?) -> List<String>` lambda
+  per Metric row (private inner class), cast back to the tracker's concrete
+  reading type — avoids a sealed-class/generic-existential ceremony for what
+  is just "turn a data class into 1-3 display strings" per metric.
+- Files changed (new):
+  wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/DebugSensorRegistry.kt
+- Did not modify SamsungSensorMonitor.kt, SensorConnectionManager.kt, or Hrv.kt.
+- Verified with `./gradlew :wear:compileDebugKotlin -q` — compiles clean.
+- **Learnings for future iterations:**
+  - US-006 (SensorCapabilityViewModel) should call registry.connect() on
+    creation, registry.disconnect() in onCleared(), and registry.trigger(id)
+    from onTrigger(metricId) — the registry already does all the serialization
+    and status bookkeeping the ViewModel needs, so the ViewModel should be a
+    thin StateFlow passthrough plus lifecycle wiring, not reimplement logic.
+  - Since the registry resolved to exactly 9 rows (one on-demand variant each
+    for ECG/BIA, not both modes), US-007's UI only needs to render 9 rows with
+    no special-casing for "metrics with two modes."
+---
