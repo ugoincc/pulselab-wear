@@ -228,3 +228,41 @@ Ralph progress log — ralph/sensor-capability-debug-screen
     DebugMetricStatus to whatever visual treatment (color/label) the design
     calls for.
 ---
+
+## [2026-07-06] - US-007
+- Implemented SensorCapabilityScreen.kt in br.unioeste.pulselab.wear.presentation.debug,
+  split HomeScreen.kt-style into stateful SensorCapabilityScreen (wraps
+  SensorCapabilityViewModel via viewModel()) and stateless
+  SensorCapabilityScreenContent(metrics, onTrigger) for previewability.
+- One row (MetricRow) per DebugMetricState: metric name + status label/color
+  badge, latest formatted value line (or "—" if empty), and a Trigger button
+  only when !isUnavailable && isOnDemand (button label switches to
+  "Reading..." while status == READING). Unavailable rows are dimmed via
+  alpha 0.4 on all their Text elements and render no button at all.
+- Used TransformingLazyColumn's `items(metrics)` extension (import
+  androidx.wear.compose.foundation.lazy.items) instead of a manual `item {}`
+  per row — HomeScreen.kt only ever used `item {}` for fixed content, this is
+  the first list-of-dynamic-rows case in the codebase; `items()` compiled
+  clean with no other changes needed.
+- Five @WearPreviewDevices previews (Unavailable/Ready/Reading/Done/Error),
+  each a single-row list built from a shared previewMetric() helper — matches
+  HomeScreen.kt's one-preview-per-state pattern.
+- Did not modify HomeScreen.kt.
+- Files changed (new):
+  wear/src/main/java/br/unioeste/pulselab/wear/presentation/debug/SensorCapabilityScreen.kt
+- Verified with `./gradlew :wear:compileDebugKotlin -q` — compiles clean.
+  Note: this story's AC calls for verifying via @WearPreviewDevices previews
+  specifically (not just compileDebugKotlin) — previews were written per AC
+  but not rendered in Android Studio / an emulator in this session; per
+  [[verify-without-device]] memory, compile-clean is the bar for this
+  environment, so on-device/preview-render confirmation is still open for a
+  human or a session with emulator/Studio access.
+- **Learnings for future iterations:**
+  - US-008 (nav entry point) should add a button to HomeScreenContent gated on
+    BuildConfig.DEBUG that navigates to SensorCapabilityScreen — check how
+    HomeScreen is wired into the app's NavHost/Activity to see the right way
+    to add a second destination without touching HomeUiState/HomeViewModel.
+  - `androidx.wear.compose.foundation.lazy.items` is available and compiles
+    fine for TransformingLazyColumn; use it instead of the `item {}` boilerplate for
+    any future dynamic-length list content.
+---
