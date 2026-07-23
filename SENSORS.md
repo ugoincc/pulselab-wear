@@ -20,7 +20,7 @@
 
 | Métrica | Fonte | Como funciona | Status |
 |---|---|---|---|
-| Frequência cardíaca | Sensor SDK `HEART_RATE_CONTINUOUS` (~1 Hz); alternativas: Health Services live/passivo | Driver da cadência de envio | ✅ validado no relógio |
+| Frequência cardíaca | Sensor SDK `HEART_RATE_CONTINUOUS` (~1 Hz) | Driver da cadência de envio. (Fontes alternativas via Health Services foram removidas na simplificação para relay — histórico no git) | ✅ validado no relógio |
 | HRV (RMSSD) | Calculado localmente do IBI (`IBI_LIST` do Sensor SDK), janela deslizante — `Hrv.kt` | Não existe HRV pronto em nenhum SDK | ✅ validado |
 | SpO2 | Sensor SDK `SPO2_ON_DEMAND`, rearmado a cada 60 s | Cada medição leva ~30 s | ✅ validado |
 | Temperatura de pele | Sensor SDK `SKIN_TEMPERATURE_CONTINUOUS` | Status `0` = válido (confirmado em device) | ✅ validado |
@@ -64,12 +64,12 @@
 ## 4. Arquitetura de coleta atual
 
 ```
-RELÓGIO                                          CELULAR
+RELÓGIO (relay, fonte única)                     CELULAR
 ┌───────────────────────────────┐    Data Layer   ┌──────────────────────────┐
 │ SensorStreamService (FGS)     │  /sensor/data   │ WearableHeartRate-       │
 │  └ SamsungSensorMonitor       │ ───────────────▶│ ListenerService          │
 │     HR+IBI→HRV, SpO2, temp    │  (JSON 1/s)     │  └ WearBridge → JS       │
-│ PassiveDataService (fallback) │                 │     WatchLiveCard (Home) │
+│  (auto-inicia ao abrir o app) │                 │     WatchLiveCard (Home) │
 │ BiaMeasurementManager (sob    │                 └──────────────────────────┘
 │  demanda, fluxo guiado)       │
 └───────────────────────────────┘
@@ -80,7 +80,7 @@ RELÓGIO                                          CELULAR
 
 ## 5. Pendências conhecidas
 
-- [ ] Validar em device os códigos de `STATUS`/`PROGRESS` do BIA (primeira medição real).
+- [ ] **BIA indisponível no Galaxy Watch Ultra via SDK**: a capability lista `BIA_ON_DEMAND`, mas `getHealthTracker(BIA_ON_DEMAND)` lança `Invalid HealthTrackerType` (tratado como falha graciosa na UI). Investigar: pode exiger outra forma de instanciar, versão de Health Platform, ou ser recorte do modelo/região.
 - [ ] Enviar resultado do BIA ao celular (novo path `/sensor/bia` + tipo no `WearBridge` — toca o repo do colega, fazer na branch `hugo/wear-sync`).
 - [ ] Medir consumo de bateria do `SensorStreamService` em sessão longa.
 - [ ] Decidir cadência de envio (1/s é caro em Bluetooth; considerar lote a cada 5–10 s).
