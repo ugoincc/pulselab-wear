@@ -14,7 +14,10 @@ class WearDataSender {
     suspend fun send(context: Context, bundle: SensorBundle): Boolean {
         return try {
             val nodes = Wearable.getNodeClient(context).connectedNodes.await()
-            if (nodes.isEmpty()) return false
+            if (nodes.isEmpty()) {
+                Log.w("WearDataSender", "No connected Data Layer nodes — is the phone paired and reachable?")
+                return false
+            }
             val payload = gson.toJson(bundle).toByteArray()
             nodes.forEach { node ->
                 Wearable.getMessageClient(context)
