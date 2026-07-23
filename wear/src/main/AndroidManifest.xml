@@ -35,16 +35,6 @@
             android:name="com.google.android.wearable.standalone"
             android:value="true" />
 
-        <!--
-            Health Services binds to this service to deliver batched heart-rate
-            data even when the app is in the background or the process was killed.
-            The PASSIVE_DATA_BINDING permission ensures only Health Services can bind.
-        -->
-        <service
-            android:name=".data.health.PassiveDataService"
-            android:exported="true"
-            android:permission="com.google.android.wearable.healthservices.permission.PASSIVE_DATA_BINDING" />
-
         <!-- Streams Samsung SDK sensor readings to the phone with the screen off -->
         <service
             android:name=".data.health.SensorStreamService"

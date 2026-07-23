@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,8 +31,6 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import br.unioeste.pulselab.wear.BuildConfig
-import br.unioeste.pulselab.wear.data.health.HeartRateRepository
-import br.unioeste.pulselab.wear.model.DataSource
 import br.unioeste.pulselab.wear.model.HealthMetric
 import br.unioeste.pulselab.wear.presentation.bia.BiaScreen
 import br.unioeste.pulselab.wear.presentation.debug.SensorCapabilityScreen
@@ -76,7 +75,6 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
 
     var hasPermission by remember {
         mutableStateOf(
-            !HeartRateRepository.requiresSensorPermission ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.BODY_SENSORS)
                 == PackageManager.PERMISSION_GRANTED
         )
@@ -105,14 +103,13 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     if (hasPermission) {
         val uiState by viewModel.uiState.collectAsState()
         val isPhoneConnected by viewModel.isPhoneConnected.collectAsState()
-        val source by viewModel.source.collectAsState()
+        // Relay behavior: start streaming as soon as we can, no tap required.
+        LaunchedEffect(Unit) { viewModel.startSession() }
         HomeScreenContent(
             uiState = uiState,
             isPhoneConnected = isPhoneConnected,
-            source = source,
             onStart = { viewModel.startSession() },
             onStop  = { viewModel.stopSession() },
-            onCycleSource = { viewModel.cycleDataSource() },
             onOpenBia = { subScreen = SubScreen.BIA },
             onOpenDebug = { subScreen = SubScreen.DEBUG }
         )
@@ -197,10 +194,8 @@ private val METRIC_NAMES = mapOf(
 fun HomeScreenContent(
     uiState: HomeUiState,
     isPhoneConnected: Boolean = false,
-    source: DataSource = DataSource.SENSOR,
     onStart: () -> Unit,
     onStop: () -> Unit,
-    onCycleSource: () -> Unit = {},
     onOpenBia: () -> Unit = {},
     showDebugEntry: Boolean = BuildConfig.DEBUG,
     onOpenDebug: () -> Unit = {}
@@ -246,7 +241,7 @@ fun HomeScreenContent(
                     is HomeUiState.Idle -> {
                         item {
                             Text(
-                                text = "Toque em Iniciar para monitorar seus sinais em tempo real.",
+                                text = "Monitoramento parado. Toque em Iniciar para retomar.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
@@ -306,22 +301,8 @@ fun HomeScreenContent(
 
                 if (showDebugEntry) {
                     item {
-                        Button(onClick = onCycleSource, modifier = Modifier.fillMaxWidth()) {
-                            Text("Fonte: ${source.label}")
-                        }
-                    }
-                    item {
                         Button(onClick = onOpenDebug, modifier = Modifier.fillMaxWidth()) {
                             Text("Debug: capacidades")
-                        }
-                    }
-                    if (uiState is HomeUiState.Monitoring) {
-                        item {
-                            Text(
-                                text = "src=${uiState.source.badge} sent=${uiState.readingsSent} phone=${uiState.phoneReachable}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                     }
                 }
@@ -354,11 +335,9 @@ fun PreviewMonitoringSensor() {
     HomeScreenContent(
         uiState = HomeUiState.Monitoring(
             bpm = 72.0, hrv = 48, spo2 = 98, stressIndex = null, skinTemp = 32.4,
-            sessionId = "preview-sensor", readingsSent = 41,
-            source = DataSource.SENSOR, phoneReachable = true, lastUpdate = 1_700_000_000_000L
+            readingsSent = 41, phoneReachable = true, lastUpdate = 1_700_000_000_000L
         ),
         isPhoneConnected = true,
-        source = DataSource.SENSOR,
         onStart = {},
         onStop = {}
     )
@@ -370,10 +349,8 @@ fun PreviewMonitoringNoPhone() {
     HomeScreenContent(
         uiState = HomeUiState.Monitoring(
             bpm = 71.0, hrv = null, spo2 = null, stressIndex = null, skinTemp = null,
-            sessionId = "preview-bg", readingsSent = 3,
-            source = DataSource.BACKGROUND, phoneReachable = false
+            readingsSent = 3, phoneReachable = false
         ),
-        source = DataSource.BACKGROUND,
         onStart = {},
         onStop = {}
     )
