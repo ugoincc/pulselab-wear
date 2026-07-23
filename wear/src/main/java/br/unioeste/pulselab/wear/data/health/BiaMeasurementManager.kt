@@ -115,8 +115,17 @@ class BiaMeasurementManager(context: Context) {
 
         connection.onConnected = {
             if (connection.isSupported(HealthTrackerType.BIA_ON_DEMAND)) {
-                tracker = connection.tracker(HealthTrackerType.BIA_ON_DEMAND)
-                    ?.also { it.setEventListener(listener) }
+                // getHealthTracker can reject types the capability list reports
+                // (seen on Galaxy Watch Ultra: "Invalid HealthTrackerType" for
+                // BIA_ON_DEMAND) — fail the flow instead of crashing the app.
+                runCatching {
+                    tracker = connection.tracker(HealthTrackerType.BIA_ON_DEMAND)
+                        ?.also { it.setEventListener(listener) }
+                }.onFailure { e ->
+                    Log.e(TAG, "Could not obtain BIA tracker", e)
+                    trySend(BiaMeasureState.Failed("Medição BIA indisponível neste relógio"))
+                    close()
+                }
             } else {
                 trySend(BiaMeasureState.Failed("BIA não suportado neste relógio"))
                 close()
