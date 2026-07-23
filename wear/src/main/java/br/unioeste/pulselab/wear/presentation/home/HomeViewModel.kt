@@ -9,7 +9,8 @@ import br.unioeste.pulselab.wear.data.health.HeartRateRepository
 import br.unioeste.pulselab.wear.data.health.LiveMeasureMonitor
 import br.unioeste.pulselab.wear.data.health.PassiveHeartRateStore
 import br.unioeste.pulselab.wear.data.health.PassiveMonitoringManager
-import br.unioeste.pulselab.wear.data.health.SamsungSensorMonitor
+import br.unioeste.pulselab.wear.data.health.SensorStreamService
+import br.unioeste.pulselab.wear.data.health.SensorStreamStore
 import br.unioeste.pulselab.wear.data.wearable.WearDataSender
 import br.unioeste.pulselab.wear.model.DataSource
 import br.unioeste.pulselab.wear.model.HeartRateReading
@@ -49,7 +50,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val heartRateRepo = HeartRateRepository()
     private val liveMonitor = LiveMeasureMonitor(application)
     private val passiveManager = PassiveMonitoringManager(application)
-    private val samsungMonitor = SamsungSensorMonitor(application)
     private val wearDataSender = WearDataSender()
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Idle)
@@ -58,7 +58,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _isPhoneConnected = MutableStateFlow(false)
     val isPhoneConnected: StateFlow<Boolean> = _isPhoneConnected.asStateFlow()
 
-    private val _source = MutableStateFlow(DataSource.LIVE)
+    // Samsung SDK is the production default: richest metric set (HR+HRV+SpO2+temp)
+    // and, via SensorStreamService, keeps streaming with the screen off.
+    private val _source = MutableStateFlow(DataSource.SENSOR)
     val source: StateFlow<DataSource> = _source.asStateFlow()
 
     private var monitoringJob: Job? = null
@@ -67,8 +69,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         Wearable.getNodeClient(application).connectedNodes
             .addOnSuccessListener { nodes -> _isPhoneConnected.value = nodes.isNotEmpty() }
 
-        // Resume a still-registered background session so the user can see/stop it.
-        if (passiveManager.isBackgroundActive) {
+        // Resume a still-running session so the user can see/stop it.
+        if (SensorStreamStore.isRunning.value) {
+            _source.value = DataSource.SENSOR
+            startSession()
+        } else if (passiveManager.isBackgroundActive) {
             _source.value = DataSource.BACKGROUND
             startSession()
         }
@@ -96,6 +101,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         // so cycling the source hot-swaps without restarting the session.
         monitoringJob = viewModelScope.launch {
             _source.collectLatest { source ->
+                // Leaving the SENSOR source must stop its foreground service.
+                if (source != DataSource.SENSOR) {
+                    SensorStreamService.stop(getApplication())
+                    SensorStreamStore.reset()
+                }
                 when (source) {
                     DataSource.LIVE -> {
                         runCatching { passiveManager.stop() }
@@ -107,7 +117,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     DataSource.SENSOR -> {
                         runCatching { passiveManager.stop() }
-                        collectForeground(samsungMonitor.readingFlow(), DataSource.SENSOR)
+                        // The foreground service owns the Samsung SDK session so it
+                        // survives screen-off; the UI just mirrors the shared store.
+                        SensorStreamService.start(getApplication())
+                        observeSensorStream()
                     }
                     DataSource.BACKGROUND -> {
                         runCatching { passiveManager.start() }
@@ -174,10 +187,36 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
+    // Sensor-service source: mirror the shared store into UI state (same shape
+    // as observePassive; the service does the sending).
+    private suspend fun observeSensorStream() {
+        combine(
+            SensorStreamStore.latest,
+            SensorStreamStore.readingsSent,
+            SensorStreamStore.phoneReachable
+        ) { reading, sent, reachable -> Triple(reading, sent, reachable) }
+            .collect { (reading, sent, reachable) ->
+                val current = _uiState.value as? HomeUiState.Monitoring ?: return@collect
+                _uiState.value = current.copy(
+                    bpm = reading?.bpm,
+                    hrv = reading?.hrv,
+                    spo2 = reading?.spo2,
+                    stressIndex = reading?.stressIndex,
+                    skinTemp = reading?.skinTemp,
+                    readingsSent = sent,
+                    phoneReachable = reachable,
+                    source = DataSource.SENSOR,
+                    lastUpdate = reading?.timestamp
+                )
+            }
+    }
+
     fun stopSession() {
         monitoringJob?.cancel()
         monitoringJob = null
-        // Explicit stop must also end background monitoring.
+        // Explicit stop must also end both background paths.
+        SensorStreamService.stop(getApplication())
+        SensorStreamStore.reset()
         viewModelScope.launch { runCatching { passiveManager.stop() } }
         _uiState.value = HomeUiState.Idle
     }

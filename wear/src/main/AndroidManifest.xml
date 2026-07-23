@@ -7,6 +7,10 @@
     <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />
     <!-- Lets Health Services restart passive monitoring after a reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Keeps the Samsung SDK sensor stream alive with the screen off -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.type.watch" />
 
     <application
@@ -40,6 +44,12 @@
             android:name=".data.health.PassiveDataService"
             android:exported="true"
             android:permission="com.google.android.wearable.healthservices.permission.PASSIVE_DATA_BINDING" />
+
+        <!-- Streams Samsung SDK sensor readings to the phone with the screen off -->
+        <service
+            android:name=".data.health.SensorStreamService"
+            android:exported="false"
+            android:foregroundServiceType="health" />
 
         <activity
             android:name=".presentation.MainActivity"
