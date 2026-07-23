@@ -12,7 +12,10 @@ android {
     }
 
     defaultConfig {
-        applicationId = "br.unioeste.pulselab.wear"
+        // Must match the phone app's applicationId (br.unioeste.pulselab):
+        // the Wear Data Layer only routes messages between apps that share the
+        // same package name and signing certificate on both devices.
+        applicationId = "br.unioeste.pulselab"
         minSdk = 30
         // targetSdk 35 (not 36): on Wear OS 6 / API 36, BODY_SENSORS is deprecated
         // and heart rate requires the granular health permissions (READ_HEART_RATE)
@@ -21,6 +24,17 @@ android {
         targetSdk = 35
         versionCode = 2
         versionName = "1.1"
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            // Same keystore as the phone app (React Native's stock debug.keystore):
+            // the Wear Data Layer requires matching signatures across devices.
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
