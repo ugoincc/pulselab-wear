@@ -13,9 +13,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.graphics.Color
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -26,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -33,6 +33,7 @@ import br.unioeste.pulselab.wear.BuildConfig
 import br.unioeste.pulselab.wear.data.health.HeartRateRepository
 import br.unioeste.pulselab.wear.model.DataSource
 import br.unioeste.pulselab.wear.model.HealthMetric
+import br.unioeste.pulselab.wear.presentation.bia.BiaScreen
 import br.unioeste.pulselab.wear.presentation.debug.SensorCapabilityScreen
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
@@ -42,6 +43,7 @@ import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
+import androidx.wear.compose.material3.OutlinedButton
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
@@ -50,14 +52,24 @@ import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
 //   HomeScreen        — knows about the ViewModel (stateful, not previewable)
 //   HomeScreenContent — only knows about data + callbacks (stateless, previewable)
 
+private enum class SubScreen { NONE, BIA, DEBUG }
+
 @Composable
 fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
-    var showDebugScreen by remember { mutableStateOf(false) }
+    var subScreen by remember { mutableStateOf(SubScreen.NONE) }
 
-    if (showDebugScreen) {
-        BackHandler { showDebugScreen = false }
-        SensorCapabilityScreen()
-        return
+    when (subScreen) {
+        SubScreen.BIA -> {
+            BackHandler { subScreen = SubScreen.NONE }
+            BiaScreen()
+            return
+        }
+        SubScreen.DEBUG -> {
+            BackHandler { subScreen = SubScreen.NONE }
+            SensorCapabilityScreen()
+            return
+        }
+        SubScreen.NONE -> Unit
     }
 
     val context = LocalContext.current
@@ -101,7 +113,8 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
             onStart = { viewModel.startSession() },
             onStop  = { viewModel.stopSession() },
             onCycleSource = { viewModel.cycleDataSource() },
-            onOpenDebug = { showDebugScreen = true }
+            onOpenBia = { subScreen = SubScreen.BIA },
+            onOpenDebug = { subScreen = SubScreen.DEBUG }
         )
     } else {
         BodySensorsRationaleScreen(
@@ -130,13 +143,13 @@ private fun BodySensorsRationaleScreen(
             TransformingLazyColumn(contentPadding = contentPadding, state = listState) {
                 item {
                     Text(
-                        text = "Heart Rate Permission",
+                        text = "Sensores corporais",
                         style = MaterialTheme.typography.titleLarge
                     )
                 }
                 item {
                     Text(
-                        text = "This app needs access to your heart rate sensor to monitor your BPM.",
+                        text = "O app precisa acessar os sensores do relógio para monitorar sua frequência cardíaca.",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -146,14 +159,14 @@ private fun BodySensorsRationaleScreen(
                             onClick = onOpenSettings,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Open Settings")
+                            Text("Abrir Configurações")
                         }
                     } else {
                         Button(
                             onClick = onGrantPermission,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Grant Permission")
+                            Text("Permitir acesso")
                         }
                     }
                 }
@@ -171,15 +184,24 @@ private fun HomeUiState.Monitoring.valueFor(metric: HealthMetric): String? = whe
     HealthMetric.STRESS -> stressIndex?.toString()
 }
 
+private val METRIC_NAMES = mapOf(
+    HealthMetric.HEART_RATE to "Frequência cardíaca",
+    HealthMetric.HRV to "Variabilidade (HRV)",
+    HealthMetric.SPO2 to "Oxigenação (SpO2)",
+    HealthMetric.SKIN_TEMP to "Temperatura da pele",
+    HealthMetric.STRESS to "Estresse",
+)
+
 // ─── STATELESS CONTENT ──────────────────────────────────────────────────────
 @Composable
 fun HomeScreenContent(
     uiState: HomeUiState,
     isPhoneConnected: Boolean = false,
-    source: DataSource = DataSource.LIVE,
+    source: DataSource = DataSource.SENSOR,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onCycleSource: () -> Unit = {},
+    onOpenBia: () -> Unit = {},
     showDebugEntry: Boolean = BuildConfig.DEBUG,
     onOpenDebug: () -> Unit = {}
 ) {
@@ -191,10 +213,10 @@ fun HomeScreenContent(
             edgeButton = {
                 when (uiState) {
                     is HomeUiState.Idle, is HomeUiState.Error -> {
-                        EdgeButton(onClick = onStart) { Text("Start") }
+                        EdgeButton(onClick = onStart) { Text("Iniciar") }
                     }
                     is HomeUiState.Monitoring -> {
-                        EdgeButton(onClick = onStop) { Text("Stop") }
+                        EdgeButton(onClick = onStop) { Text("Parar") }
                     }
                 }
             }
@@ -203,15 +225,20 @@ fun HomeScreenContent(
 
                 item {
                     ListHeader(modifier = Modifier.fillMaxWidth()) {
-                        Text("PulseLab Wear")
+                        Text("PulseLab")
                     }
                 }
 
-                // Source selector — visible in every state for quick debug switching.
+                // Phone connection status, always visible.
                 item {
-                    Button(onClick = onCycleSource, modifier = Modifier.fillMaxWidth()) {
-                        Text("Source: ${source.label}")
-                    }
+                    Text(
+                        text = if (isPhoneConnected) "● Celular conectado" else "○ Celular desconectado",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isPhoneConnected) Color(0xFF4CAF50)
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
 
                 when (val state = uiState) {
@@ -219,63 +246,50 @@ fun HomeScreenContent(
                     is HomeUiState.Idle -> {
                         item {
                             Text(
-                                text = "Ready — press Start",
-                                style = MaterialTheme.typography.bodyMedium
+                                text = "Toque em Iniciar para monitorar seus sinais em tempo real.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                             )
                         }
                     }
 
                     is HomeUiState.Monitoring -> {
-                        // Every metric, every time — value or a "where it comes from" note.
-                        item {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                HealthMetric.entries.forEach { metric ->
-                                    val value = state.valueFor(metric)
+                        HealthMetric.entries.forEach { metric ->
+                            item {
+                                val value = state.valueFor(metric)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Text(
-                                        text = "${metric.label}: ${value ?: "—"} ${metric.unit}",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        modifier = Modifier.fillMaxWidth()
+                                        text = METRIC_NAMES.getValue(metric),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    if (value == null) {
-                                        Text(
-                                            text = "↳ ${metric.provider}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
+                                    Text(
+                                        text = value?.let { "$it ${metric.unit}" } ?: "—",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
                                 }
                             }
                         }
 
-                        // Debug block.
                         item {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Text(
-                                    text = "source=${state.source.badge}  sent=${state.readingsSent}",
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                                Text(
-                                    text = "phoneReachable=${state.phoneReachable}",
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                                Text(
-                                    text = "lastUpdate=${state.lastUpdate ?: "—"}",
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                                if (state.source == DataSource.BACKGROUND) {
-                                    Text(
-                                        text = "● streaming in background",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Color(0xFF4CAF50)
-                                    )
-                                }
-                            }
+                            Text(
+                                text = "A coleta continua com a tela desligada.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                            )
                         }
                     }
 
                     is HomeUiState.Error -> {
                         item {
-                            Text(text = "Error", style = MaterialTheme.typography.titleLarge)
+                            Text(text = "Algo deu errado", style = MaterialTheme.typography.titleLarge)
                         }
                         item {
                             Text(text = state.message, style = MaterialTheme.typography.bodySmall)
@@ -283,23 +297,31 @@ fun HomeScreenContent(
                     }
                 }
 
+                // Body composition (BIA) — on-demand guided measurement.
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Text(
-                            text = if (isPhoneConnected) "Phone: Connected" else "Phone: Disconnected",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isPhoneConnected) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
-                        )
+                    OutlinedButton(onClick = onOpenBia, modifier = Modifier.fillMaxWidth()) {
+                        Text("Composição corporal")
                     }
                 }
 
                 if (showDebugEntry) {
                     item {
+                        Button(onClick = onCycleSource, modifier = Modifier.fillMaxWidth()) {
+                            Text("Fonte: ${source.label}")
+                        }
+                    }
+                    item {
                         Button(onClick = onOpenDebug, modifier = Modifier.fillMaxWidth()) {
-                            Text("Debug: Sensor Capabilities")
+                            Text("Debug: capacidades")
+                        }
+                    }
+                    if (uiState is HomeUiState.Monitoring) {
+                        item {
+                            Text(
+                                text = "src=${uiState.source.badge} sent=${uiState.readingsSent} phone=${uiState.phoneReachable}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
@@ -328,14 +350,15 @@ fun PreviewIdle() {
 
 @WearPreviewDevices
 @Composable
-fun PreviewMonitoringLive() {
+fun PreviewMonitoringSensor() {
     HomeScreenContent(
         uiState = HomeUiState.Monitoring(
-            bpm = 78.0, hrv = null, spo2 = null, stressIndex = null, skinTemp = null,
-            sessionId = "preview-live", readingsSent = 12,
-            source = DataSource.LIVE, phoneReachable = true, lastUpdate = 1_700_000_000_000L
+            bpm = 72.0, hrv = 48, spo2 = 98, stressIndex = null, skinTemp = 32.4,
+            sessionId = "preview-sensor", readingsSent = 41,
+            source = DataSource.SENSOR, phoneReachable = true, lastUpdate = 1_700_000_000_000L
         ),
-        source = DataSource.LIVE,
+        isPhoneConnected = true,
+        source = DataSource.SENSOR,
         onStart = {},
         onStop = {}
     )
@@ -343,22 +366,7 @@ fun PreviewMonitoringLive() {
 
 @WearPreviewDevices
 @Composable
-fun PreviewMonitoringSimulated() {
-    HomeScreenContent(
-        uiState = HomeUiState.Monitoring(
-            bpm = 72.0, hrv = 48, spo2 = 98, stressIndex = 25, skinTemp = 32.4,
-            sessionId = "preview-sim", readingsSent = 7,
-            source = DataSource.SIMULATED, phoneReachable = true, lastUpdate = 1_700_000_000_000L
-        ),
-        source = DataSource.SIMULATED,
-        onStart = {},
-        onStop = {}
-    )
-}
-
-@WearPreviewDevices
-@Composable
-fun PreviewMonitoringBackgroundNoPhone() {
+fun PreviewMonitoringNoPhone() {
     HomeScreenContent(
         uiState = HomeUiState.Monitoring(
             bpm = 71.0, hrv = null, spo2 = null, stressIndex = null, skinTemp = null,
@@ -375,7 +383,7 @@ fun PreviewMonitoringBackgroundNoPhone() {
 @Composable
 fun PreviewError() {
     HomeScreenContent(
-        uiState = HomeUiState.Error("Could not reach server"),
+        uiState = HomeUiState.Error("Não foi possível conectar aos sensores"),
         onStart = {},
         onStop = {}
     )
@@ -383,24 +391,11 @@ fun PreviewError() {
 
 @WearPreviewDevices
 @Composable
-fun PreviewDebugEntryVisible() {
+fun PreviewProductionNoDebug() {
     HomeScreenContent(
         uiState = HomeUiState.Idle,
         onStart = {},
         onStop = {},
-        showDebugEntry = true,
-        onOpenDebug = {}
-    )
-}
-
-@WearPreviewDevices
-@Composable
-fun PreviewDebugEntryHiddenInRelease() {
-    HomeScreenContent(
-        uiState = HomeUiState.Idle,
-        onStart = {},
-        onStop = {},
-        showDebugEntry = false,
-        onOpenDebug = {}
+        showDebugEntry = false
     )
 }
