@@ -94,7 +94,20 @@ class SamsungSensorMonitor(context: Context) {
                         // Raw IBI + status logged so the SDK's status semantics can be
                         // confirmed on device: IBI_STATUS_VALID is still an assumption,
                         // and it demonstrably lets artefacts through (see IbiWindow.add).
-                        Log.d(TAG, "HR=$hr status=$hrStatus ibi=$ibiList ibiStatus=$ibiStatus")
+                        //
+                        // lagMs = how far behind the wall clock the sample's own
+                        // timestamp is. With the screen on this sits near zero; the
+                        // question it exists to answer is what happens across a
+                        // screen-off window, where the SDK withholds delivery and
+                        // flushes a burst on wake. A lag that grows with the burst
+                        // means timestamps are real sample times (series intact); a
+                        // lag near zero for every sample in the burst would mean they
+                        // are delivery times, and the time series would be worthless.
+                        val lagMs = System.currentTimeMillis() - dp.getTimestamp()
+                        Log.d(
+                            TAG,
+                            "HR=$hr status=$hrStatus lagMs=$lagMs ibi=$ibiList ibiStatus=$ibiStatus"
+                        )
 
                         if (hrStatus == HR_STATUS_OFF_BODY) continue  // off-wrist → ignore
 

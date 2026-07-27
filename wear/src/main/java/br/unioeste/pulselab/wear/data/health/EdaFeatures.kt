@@ -27,6 +27,13 @@ const val SCR_AMPLITUDE_THRESHOLD_US = 0.02
  * caller pushes samples as they arrive and reads derived features whenever it
  * emits.
  *
+ * DORMANT on current hardware. `EDA_CONTINUOUS` is absent from the Galaxy Watch
+ * Ultra's capability list (confirmed on device, 2026-07-27), so nothing ever
+ * calls [add] and every reader gets null. Kept wired end-to-end — tracker,
+ * window, wire fields, phone-side feature — because what is missing is the
+ * sensor, not the code: on a watch that exposes the tracker this starts
+ * producing values with no change here.
+ *
  * Not thread-safe — drive it from a single callback thread.
  */
 class EdaWindow(private val windowMs: Long = DEFAULT_WINDOW_MS) {

@@ -73,7 +73,7 @@ para dados reais. Estão no histórico do git se voltarem a ser necessários.
 
 | Métrica | Motivo | Alternativa |
 |---|---|---|
-| **EDA (atividade eletrodérmica)** | `EDA_CONTINUOUS` **não aparece na capability do Galaxy Watch Ultra** (confirmado 2026-07-27). Não é código de status errado nem falha de instanciação: o tracker simplesmente não existe neste hardware | Nenhuma no relógio. O índice composto roda com as features restantes — ver a ressalva abaixo |
+| **EDA (atividade eletrodérmica)** | **Exige Galaxy Watch8 ou mais novo.** O Ultra (2024, SM-L705F) é geração Watch7 — o sensor não existe nele. Confirmado nos dois sentidos: `EDA_CONTINUOUS` não aparece na capability do aparelho, e o codelab oficial exige "Galaxy Watch8 or newer" | Nenhuma neste hardware. Ver a ressalva metodológica abaixo |
 | Índice de estresse | Proprietário Samsung (derivado de HRV), sem API pública em nenhum SDK | Índice composto próprio (RMSSD + SI de Baevsky), transparente e citável — ver acima |
 
 > **Ressalva metodológica — importante para a monografia.** Sem o EDA, o índice
@@ -82,8 +82,42 @@ para dados reais. Estão no histórico do git se voltarem a ser necessários.
 > mesma variabilidade cardíaca. O EDA era justamente o canal que traria ativação
 > simpática sem o confundidor vagal que a HRV carrega (é esse o argumento de
 > Healey & Picard, 2005, para fusão multimodal). Chamar o resultado atual de
-> "multimodal" seria incorreto. Ou se aceita isso explicitamente como limitação,
-> ou se busca EDA em outro hardware antes da coleta definitiva.
+> "multimodal" seria incorreto — o correto é descrevê-lo como um índice composto
+> **no domínio da HRV**, com duas estatísticas complementares (uma de dispersão
+> de curto prazo, outra de concentração do histograma) sobre o mesmo sinal.
+>
+> Decisão tomada em 2026-07-27: **aceitar como limitação declarada**, sem trocar
+> de hardware. O código do EDA permanece na árvore, dormente e ligado ponta a
+> ponta (`EdaWindow`, tracker, campos `edaTonic`/`edaScrPerMin` no payload,
+> feature no app do celular) — o que falta é sensor, não código. Num Watch8 a
+> feature volta sozinha, e o celular já renormaliza os pesos conforme as features
+> presentes.
+
+## 2.1 Faixas de interpretação
+
+Referência rápida para leitura em campo. Duas advertências antes de usar:
+
+- **O que interessa é o desvio da própria baseline, não o valor absoluto.** As
+  faixas abaixo são de literatura populacional e variam muito entre pessoas
+  (idade, condicionamento, medicação). O índice composto existe justamente por
+  isso: ele compara cada participante com o próprio repouso.
+- Valores fora da faixa **não são diagnóstico**. Este app não tem — nem busca —
+  qualquer aprovação regulatória.
+
+| Métrica | Repouso típico | Anormal / atenção | Como ler |
+|---|---|---|---|
+| **FC** | 60–100 bpm | <50 ou >120 sem esforço físico | Sobe com estresse agudo, mas é o sinal menos específico de todos: café, postura e conversa mexem nela |
+| **HRV (RMSSD)** | 20–90 ms (adulto saudável, janela de 60 s) | Queda >30% da baseline pessoal sustentada | **Cai** sob dominância simpática — por isso entra invertida no índice. Valores >150 ms quase sempre são artefato, não relaxamento |
+| **SI de Baevsky** | 50–150 (escala bruta) | >500 = forte dominância simpática; <25 pode indicar janela ruidosa demais | Sobe rápido sob estresse. Muito mais sensível que o RMSSD isolado, e por isso mais sujeito a falso positivo com artefato |
+| **SpO2** | 95–100% | <90% de forma sustentada | Não é métrica de estresse; entra como contexto/qualidade de sinal. Medição de pulso é sensível a ajuste da pulseira |
+| **Temp. da pele** | 30–35 °C no pulso | Saltos >2 °C em minutos | Bem abaixo da temperatura central. Responde mais ao ambiente que ao estado emocional — ler como contexto, não como estresse |
+| **Índice composto** | ~0 (igual à baseline) | >+0,5 elevado, <-0,5 baixo | Em desvios-padrão da própria baseline. Os cortes em ±0,5 são **convenção de leitura, não resultado validado** |
+| **motionFlag** | falso a maior parte do tempo | true persistente | Não é medida: janela contaminada por movimento. Se estiver quase sempre true, recalibrar o limiar antes de confiar em qualquer outra métrica |
+
+**Taxa de rejeição de IBI** é a métrica de qualidade que não aparece na tela mas
+sai no Logcat (`N descartados`). Até ~20% é normal em PPG de pulso; acima de 40%
+sustentado indica pulseira frouxa ou posição ruim, e as features de HRV daquela
+sessão devem ser tratadas com desconfiança.
 
 ## 3. Licenciamento — o que precisa de quê
 
@@ -149,6 +183,21 @@ Payload em `/sensor/data` (`SensorBundle`, serializado por Gson):
       sessões antes de mexer no limiar de Malik.
 - [ ] `SensorStreamService` registrou um `JobCancellationException` seguido de
       reinício automático numa das rodadas. Não se repetiu; vigiar em sessão longa.
+- [ ] **Entrega em lote com a tela apagada — pendência aberta e importante.**
+      Medido em 2026-07-27: tela apagada às 19:18:48 (`mWakefulness=Dozing`), **80
+      segundos sem nenhuma emissão**, e às 19:20:10 — 2 s após acender — chegaram
+      **149 amostras de uma vez**. O foreground service com `PARTIAL_WAKE_LOCK`
+      não impede isso; quem enfileira é o SDK/plataforma, não o nosso processo.
+      Consequências: o relay ao celular fica mudo durante o intervalo e depois
+      dispara ~150 mensagens Data Layer em 2 s (candidato a descarte por
+      throttling), e a tela "salta".
+      Falta responder: **os timestamps são o instante real da amostra ou o da
+      entrega?** Se forem reais, a série continua válida e o problema é só de
+      tempo real; se forem de entrega, a série está corrompida com a tela
+      apagada. O log agora emite `lagMs` por amostra exatamente para isso.
+      *A medição de 19:18 não vale como teste de coleta*: o relógio estava fora do
+      pulso (`status=-3`, `HR=0` nas 149 amostras). Repetir **com o relógio
+      vestido**.
 
 ### Operacional
 

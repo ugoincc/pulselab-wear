@@ -161,7 +161,6 @@ private fun SensorReading?.orbValue(metric: HealthMetric): String? = when (metri
     HealthMetric.STRESS_INDEX -> this?.baevskySI?.let { "%.0f".format(it) }
     HealthMetric.SPO2 -> this?.spo2?.toString()
     HealthMetric.SKIN_TEMP -> this?.skinTemp?.let { "%.1f".format(it) }
-    HealthMetric.EDA -> this?.edaTonic?.let { "%.2f".format(it) }
 }
 
 // ─── STATELESS CONTENT ──────────────────────────────────────────────────────
