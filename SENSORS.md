@@ -163,6 +163,39 @@ Payload em `/sensor/data` (`SensorBundle`, serializado por Gson):
 
 - Os nomes dos campos são o contrato com o `WearBridge` do app do celular —
   renomear um é breaking change entre repositórios.
+
+### 4.1 Entrega em rajadas com a tela apagada — medido e resolvido
+
+Com a tela apagada (`mWakefulness=Dozing`) a plataforma **não entrega em tempo
+real**: ela acumula e descarrega em rajadas. Medição de 2026-07-27, relógio
+vestido, ciclo de 30 s aceso / 95 s apagado:
+
+| Rajada | Amostras | Idade da mais antiga |
+|---|---|---|
+| 20:19:41 | 38 | 17,6 s |
+| 20:20:41 | 66 | 43,6 s |
+| 20:21:09 | 50 | 25,6 s |
+| 20:21:42 | 14 | 27,5 s |
+
+O `PARTIAL_WAKE_LOCK` do foreground service não impede — quem enfileira é a
+plataforma, não o nosso processo.
+
+**Os dados não são corrompidos.** A pergunta decisiva era se o timestamp de cada
+amostra é o instante real de aquisição ou o da entrega. Instrumentamos `lagMs`
+(distância entre o timestamp da amostra e o relógio de parede) e dentro de cada
+rajada ele decresce em passos de **exatamente 1000 ms** (27549 → 26550 → 25550 →
+… → 552 → 542). Ou seja: o sensor amostra continuamente a 1 Hz e carimba cada
+amostra com o instante verdadeiro; só a *entrega* é adiada.
+
+Consequências práticas:
+
+- **Para a pesquisa: nenhuma.** A série temporal fica completa, a 1 Hz, com
+  timestamps corretos. Nada se perde com a tela apagada.
+- **Para o tempo real: sim.** O índice no celular pode ficar até ~45 s
+  desatualizado enquanto a tela está apagada. É limite de plataforma, não bug —
+  qualquer expectativa de "ao vivo" durante o uso normal precisa acomodar isso.
+- **Para o transporte: é preciso corrigir.** Uma mensagem Data Layer por amostra
+  vira uma rajada de ~66 mensagens em menos de 1 s. Ver pendências.
 - Package name e assinatura **precisam ser idênticos** nos dois apps (`br.unioeste.pulselab` + debug.keystore do RN) — requisito do Data Layer.
 - O receptor no celular precisa do `<data android:scheme="wear" .../>` no intent-filter, senão o GMS descarta a mensagem silenciosamente.
 
@@ -183,21 +216,11 @@ Payload em `/sensor/data` (`SensorBundle`, serializado por Gson):
       sessões antes de mexer no limiar de Malik.
 - [ ] `SensorStreamService` registrou um `JobCancellationException` seguido de
       reinício automático numa das rodadas. Não se repetiu; vigiar em sessão longa.
-- [ ] **Entrega em lote com a tela apagada — pendência aberta e importante.**
-      Medido em 2026-07-27: tela apagada às 19:18:48 (`mWakefulness=Dozing`), **80
-      segundos sem nenhuma emissão**, e às 19:20:10 — 2 s após acender — chegaram
-      **149 amostras de uma vez**. O foreground service com `PARTIAL_WAKE_LOCK`
-      não impede isso; quem enfileira é o SDK/plataforma, não o nosso processo.
-      Consequências: o relay ao celular fica mudo durante o intervalo e depois
-      dispara ~150 mensagens Data Layer em 2 s (candidato a descarte por
-      throttling), e a tela "salta".
-      Falta responder: **os timestamps são o instante real da amostra ou o da
-      entrega?** Se forem reais, a série continua válida e o problema é só de
-      tempo real; se forem de entrega, a série está corrompida com a tela
-      apagada. O log agora emite `lagMs` por amostra exatamente para isso.
-      *A medição de 19:18 não vale como teste de coleta*: o relógio estava fora do
-      pulso (`status=-3`, `HR=0` nas 149 amostras). Repetir **com o relógio
-      vestido**.
+- [ ] **Enviar em lote ao celular.** Deixou de ser otimização e virou correção —
+      ver §4.1: a plataforma já entrega em rajadas de até 66 amostras, e o
+      `WearDataSender` dispara uma mensagem Data Layer por amostra, ou seja ~66
+      mensagens em menos de 1 s. Trocar por uma mensagem com array de amostras
+      (muda o contrato nos dois repositórios).
 
 ### Operacional
 
