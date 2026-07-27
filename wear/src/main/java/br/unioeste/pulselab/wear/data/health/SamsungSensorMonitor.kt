@@ -41,8 +41,14 @@ private const val SPO2_REARM_INTERVAL_MS = 60_000L
 
 /**
  * The watch's single source of biometrics, backed by the Samsung Health Sensor
- * SDK. Emits one [SensorReading] per heart-rate sample (~1 Hz), carrying every
+ * SDK. Emits one batch of [SensorReading] per SDK callback, carrying every
  * channel the watch can read.
+ *
+ * Batches, not single readings, because that is the shape the platform actually
+ * delivers: with the screen on a batch is usually one sample, but while dozing
+ * delivery is withheld and arrives in bursts of up to 66 (SENSORS.md §4.1).
+ * Preserving that boundary lets the phone receive one Data Layer message per
+ * burst instead of one per sample.
  *
  * Two of the six values are computed here rather than read: RMSSD ([IbiWindow])
  * and the Baevsky Stress Index ([BaevskyStressIndex]), both over the same window
@@ -64,7 +70,7 @@ class SamsungSensorMonitor(context: Context) {
     fun readingFlow(
         windowMs: Long = IbiWindow.DEFAULT_WINDOW_MS,
         spo2RearmMs: Long = SPO2_REARM_INTERVAL_MS
-    ): Flow<SensorReading> =
+    ): Flow<List<SensorReading>> =
         callbackFlow {
             val connection = SensorConnectionManager(appContext)
             val ibiWindow = IbiWindow(windowMs)
@@ -85,6 +91,12 @@ class SamsungSensorMonitor(context: Context) {
 
             val hrListener = object : HealthTracker.TrackerEventListener {
                 override fun onDataReceived(dataPoints: List<DataPoint>) {
+                    // One emission per callback, not per data point: this callback IS
+                    // the platform's burst boundary (up to 66 samples at once with the
+                    // screen dozing), and the phone should receive one Data Layer
+                    // message per burst rather than one per sample.
+                    val batch = ArrayList<SensorReading>(dataPoints.size)
+
                     for (dp in dataPoints) {
                         val hr = dp.getValue(ValueKey.HeartRateSet.HEART_RATE)
                         val hrStatus = dp.getValue(ValueKey.HeartRateSet.HEART_RATE_STATUS)
@@ -143,21 +155,21 @@ class SamsungSensorMonitor(context: Context) {
                                     "motion=$moving p2p=${motionGate.peakToPeak()?.let { "%.0f".format(it) } ?: "—"}"
                             )
 
-                            trySend(
-                                SensorReading(
-                                    bpm = hr.toDouble(),
-                                    hrv = rmssd?.roundToInt(),
-                                    spo2 = latestSpo2,
-                                    skinTemp = latestSkinTemp,
-                                    baevskySI = si,
-                                    edaTonic = edaWindow.tonicLevel(),
-                                    edaScrPerMin = edaWindow.scrPerMinute(),
-                                    motionFlag = moving,
-                                    timestamp = dp.getTimestamp()
-                                )
+                            batch += SensorReading(
+                                bpm = hr.toDouble(),
+                                hrv = rmssd?.roundToInt(),
+                                spo2 = latestSpo2,
+                                skinTemp = latestSkinTemp,
+                                baevskySI = si,
+                                edaTonic = edaWindow.tonicLevel(),
+                                edaScrPerMin = edaWindow.scrPerMinute(),
+                                motionFlag = moving,
+                                timestamp = dp.getTimestamp()
                             )
                         }
                     }
+
+                    if (batch.isNotEmpty()) trySend(batch)
                 }
 
                 override fun onFlushCompleted() { Log.d(TAG, "HR flush completed") }

@@ -15,6 +15,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import br.unioeste.pulselab.wear.R
 import br.unioeste.pulselab.wear.data.wearable.WearDataSender
+import br.unioeste.pulselab.wear.model.SensorBatch
 import br.unioeste.pulselab.wear.model.SensorBundle
 import br.unioeste.pulselab.wear.presentation.MainActivity
 import kotlinx.coroutines.CoroutineScope
@@ -60,20 +61,27 @@ class SensorStreamService : Service() {
 
         streamJob = scope.launch {
             try {
-                SamsungSensorMonitor(applicationContext).readingFlow().collect { reading ->
-                    SensorStreamStore.update(reading)
+                SamsungSensorMonitor(applicationContext).readingFlow().collect { batch ->
+                    // The UI only ever shows the newest sample; the whole batch goes
+                    // to the phone, which needs the series, not the latest value.
+                    batch.lastOrNull()?.let(SensorStreamStore::update)
+
                     val ok = sender.send(
                         applicationContext,
-                        SensorBundle(
-                            bpm = reading.bpm.toInt(),
-                            hrv = reading.hrv,
-                            spo2 = reading.spo2,
-                            skinTemp = reading.skinTemp,
-                            baevskySI = reading.baevskySI,
-                            edaTonic = reading.edaTonic,
-                            edaScrPerMin = reading.edaScrPerMin,
-                            motionFlag = reading.motionFlag,
-                            timestamp = reading.timestamp
+                        SensorBatch(
+                            samples = batch.map { reading ->
+                                SensorBundle(
+                                    bpm = reading.bpm.toInt(),
+                                    hrv = reading.hrv,
+                                    spo2 = reading.spo2,
+                                    skinTemp = reading.skinTemp,
+                                    baevskySI = reading.baevskySI,
+                                    edaTonic = reading.edaTonic,
+                                    edaScrPerMin = reading.edaScrPerMin,
+                                    motionFlag = reading.motionFlag,
+                                    timestamp = reading.timestamp
+                                )
+                            }
                         )
                     )
                     SensorStreamStore.recordSend(ok)
