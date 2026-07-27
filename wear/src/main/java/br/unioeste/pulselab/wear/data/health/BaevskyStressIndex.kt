@@ -1,7 +1,6 @@
 package br.unioeste.pulselab.wear.data.health
 
 import kotlin.math.floor
-import kotlin.math.sqrt
 
 /**
  * Baevsky's Stress Index (SI) — the second HRV-domain feature of the composite
@@ -20,8 +19,9 @@ import kotlin.math.sqrt
  *          as a percentage (0..100).
  * - MxDMn  "variation range": max RR - min RR, expressed in seconds.
  *
- * Reference: BAEVSKY, R. M. (2009). Detrending and the final sqrt transform follow
- * the Kubios HRV convention (see [compute]).
+ * Reference: BAEVSKY, R. M. (2009). The detrending step follows the Kubios HRV
+ * convention; the sqrt transform Kubios also applies is deliberately NOT applied
+ * here — see [compute].
  */
 object BaevskyStressIndex {
 
@@ -48,13 +48,19 @@ object BaevskyStressIndex {
      * Baevsky SI over [rrIntervalsMs] (valid RR/IBI intervals, in milliseconds),
      * or null when the window is too short or degenerate.
      *
-     * Two Kubios conventions are applied:
-     *  1. The slow trend is removed first ([detrend]), so a drifting heart rate
-     *     does not inflate MxDMn and deflate the index.
-     *  2. sqrt() is applied to the result, because the raw SI distribution is
-     *     strongly right-skewed. Reference ranges therefore also apply to the
-     *     transformed value: roughly 50-150 = low stress, >500 = strong
-     *     sympathetic dominance.
+     * The slow trend is removed first ([detrend]), following Kubios, so a drifting
+     * heart rate does not inflate MxDMn and deflate the index.
+     *
+     * Returned on the RAW scale, deliberately. Kubios also applies sqrt() to
+     * correct the index's strong right skew, and an earlier version of this file
+     * did the same — but Baevsky's published reference ranges (roughly 50-150 low
+     * stress, >500 strong sympathetic dominance) describe the raw index, so
+     * reporting a sqrt-transformed value against them is a category error. It
+     * showed up immediately on device: a resting SI of ~44 was being displayed as
+     * 6.6, which looks broken but was the transform, not the maths.
+     *
+     * The sqrt belongs in the offline statistical pipeline, where normality
+     * actually matters. Here the interpretable scale wins.
      */
     fun compute(rrIntervalsMs: List<Double>): Double? {
         if (rrIntervalsMs.size < MIN_INTERVALS) return null
@@ -79,7 +85,7 @@ object BaevskyStressIndex {
 
         if (moSeconds <= 0.0 || mxDMnSeconds <= 0.0) return null
 
-        return sqrt(amo / (2.0 * moSeconds * mxDMnSeconds))
+        return amo / (2.0 * moSeconds * mxDMnSeconds)
     }
 
     /**

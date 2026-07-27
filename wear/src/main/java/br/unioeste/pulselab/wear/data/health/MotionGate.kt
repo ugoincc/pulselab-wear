@@ -63,11 +63,15 @@ class MotionGate(
         /**
          * Peak-to-peak threshold in raw accelerometer units.
          *
-         * PROVISIONAL: the SDK does not document its accelerometer scale, so this
-         * value still has to be calibrated against real rest data — a seated day
-         * trader at a desk, which is a low-movement baseline. [peakToPeak] is
-         * logged every second precisely so this can be set from measurement rather
-         * than guessed.
+         * First on-device measurement (SM-L705F, 2026-07-27, 150 windows) came out
+         * cleanly bimodal: p50 = 0 with the watch resting still, ~400 while being
+         * handled, and nothing in between. 200 sits in the empty middle.
+         *
+         * STILL PROVISIONAL, because that run had the watch lying on a desk, not
+         * on a wrist: a worn watch has a nonzero floor from breathing and micro
+         * movement. Re-measure with the watch actually worn, seated at a desk,
+         * before trusting this for a collection session. [peakToPeak] is logged
+         * every second so the calibration is a reading, not a guess.
          */
         const val DEFAULT_THRESHOLD = 200.0
     }

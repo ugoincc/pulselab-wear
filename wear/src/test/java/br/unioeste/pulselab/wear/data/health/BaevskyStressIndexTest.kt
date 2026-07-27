@@ -63,15 +63,18 @@ class BaevskyStressIndexTest {
     }
 
     @Test
-    fun `si survives a realistic noisy series`() {
-        // Sanity check that a plausible resting trace produces a finite,
-        // positive index rather than null or NaN.
+    fun `a resting series lands on Baevsky's published scale`() {
+        // Regression guard for the scale bug found on device: with the sqrt
+        // transform applied, a resting trace scored ~7, which reads as broken
+        // against Baevsky's reference ranges (50-150 low stress, >500 strong
+        // sympathetic dominance) because those describe the RAW index.
         val rng = java.util.Random(42)
-        val realistic = List(120) { 850.0 + rng.nextGaussian() * 30.0 }
+        val resting = List(120) { 850.0 + rng.nextGaussian() * 30.0 }
 
-        val si = BaevskyStressIndex.compute(realistic)
+        val si = BaevskyStressIndex.compute(resting)
 
         assertNotNull(si)
         assertTrue("SI should be finite and positive, was $si", si!! > 0.0 && si.isFinite())
+        assertTrue("SI should be on the raw scale, not sqrt-transformed — was $si", si > 10.0)
     }
 }

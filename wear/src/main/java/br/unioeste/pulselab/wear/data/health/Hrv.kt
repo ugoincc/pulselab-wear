@@ -1,5 +1,6 @@
 package br.unioeste.pulselab.wear.data.health
 
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 /**
@@ -33,6 +34,28 @@ fun rmssd(ibiMs: List<Double>): Double? {
 }
 
 /**
+ * Reconstructs the end time of each interval in a batch that the SDK stamped with
+ * a single timestamp.
+ *
+ * The Samsung SDK does not deliver one interval per data point: on device it
+ * delivers long bursts (165 intervals in one point was observed) all carrying the
+ * batch's timestamp. Treating them as simultaneous makes a sliding time window
+ * meaningless — the whole batch enters and leaves together.
+ *
+ * The last interval ends when the batch was stamped; each earlier one ends one
+ * interval sooner. Returns end times aligned index-for-index with [intervalsMs].
+ */
+fun ibiEndTimes(intervalsMs: List<Int>, batchEndMs: Long): LongArray {
+    val endTimes = LongArray(intervalsMs.size)
+    var backwards = 0L
+    for (i in intervalsMs.indices.reversed()) {
+        endTimes[i] = batchEndMs - backwards
+        backwards += intervalsMs[i].toLong()
+    }
+    return endTimes
+}
+
+/**
  * Accumulates valid IBI samples within a sliding time window and computes RMSSD
  * over them. The window length is a configurable parameter (handoff §7 calls out
  * 60 s vs 5 min as a design decision to document); defaults to 60 s.
@@ -45,13 +68,59 @@ class IbiWindow(private val windowMs: Long = DEFAULT_WINDOW_MS) {
 
     private val samples = ArrayDeque<Sample>()
 
-    /** Add one valid IBI (ms) observed at [atMs] (epoch ms), evicting stale ones. */
-    fun add(ibiMs: Double, atMs: Long) {
+    /** Last interval that passed the filters — the reference for the Malik rule. */
+    private var lastAccepted: Double? = null
+    private var consecutiveRejections = 0
+
+    /** How many intervals the filters have thrown away, for on-device diagnosis. */
+    var rejected: Int = 0
+        private set
+
+    /**
+     * Offers one IBI (ms) observed at [atMs] (epoch ms) to the window, returning
+     * whether it was accepted. Stale samples are evicted on every call.
+     *
+     * The SDK's own status flag is not enough: on-device validation (SM-L705F,
+     * 2026-07-27) showed intervals ~700 ms out of line slipping through and
+     * driving RMSSD to 300 ms at a resting heart rate of 100 bpm — a missed beat
+     * reported as one long interval. RMSSD squares successive differences, so a
+     * single artefact like that dominates the whole window.
+     *
+     * Two standard HRV preprocessing filters, both citable:
+     *  1. Absolute plausibility: outside [MIN_PLAUSIBLE_IBI_MS]..[MAX_PLAUSIBLE_IBI_MS]
+     *     no interval is physiological, whatever the sensor claims.
+     *  2. Malik rule (Task Force, 1996): reject an interval differing more than
+     *     [MALIK_MAX_RELATIVE_CHANGE] from the previous accepted one.
+     *
+     * The Malik rule alone would deadlock if the reference itself were wrong or
+     * the heart rate genuinely jumped (standing up, re-seating the watch), so
+     * after [MAX_CONSECUTIVE_REJECTIONS] refusals in a row the window accepts the
+     * value and re-anchors on it.
+     */
+    fun add(ibiMs: Double, atMs: Long): Boolean {
+        if (ibiMs < MIN_PLAUSIBLE_IBI_MS || ibiMs > MAX_PLAUSIBLE_IBI_MS) {
+            rejected++
+            return false
+        }
+
+        val previous = lastAccepted
+        if (previous != null &&
+            abs(ibiMs - previous) > MALIK_MAX_RELATIVE_CHANGE * previous &&
+            consecutiveRejections < MAX_CONSECUTIVE_REJECTIONS
+        ) {
+            consecutiveRejections++
+            rejected++
+            return false
+        }
+
+        consecutiveRejections = 0
+        lastAccepted = ibiMs
         samples.addLast(Sample(atMs, ibiMs))
         val cutoff = atMs - windowMs
         while (samples.isNotEmpty() && samples.first().atMs < cutoff) {
             samples.removeFirst()
         }
+        return true
     }
 
     /** RMSSD over the current window, or null if fewer than two intervals. */
@@ -69,9 +138,26 @@ class IbiWindow(private val windowMs: Long = DEFAULT_WINDOW_MS) {
 
     val size: Int get() = samples.size
 
-    fun clear() = samples.clear()
+    fun clear() {
+        samples.clear()
+        lastAccepted = null
+        consecutiveRejections = 0
+        rejected = 0
+    }
 
     companion object {
         const val DEFAULT_WINDOW_MS = 60_000L
+
+        /** 300 ms = 200 bpm. Nothing shorter is a real beat-to-beat interval. */
+        const val MIN_PLAUSIBLE_IBI_MS = 300.0
+
+        /** 2000 ms = 30 bpm. Longer almost always means a missed beat. */
+        const val MAX_PLAUSIBLE_IBI_MS = 2000.0
+
+        /** Malik rule threshold: 20 % change from the previous accepted interval. */
+        const val MALIK_MAX_RELATIVE_CHANGE = 0.20
+
+        /** Refusals in a row before the window re-anchors on the new value. */
+        const val MAX_CONSECUTIVE_REJECTIONS = 5
     }
 }

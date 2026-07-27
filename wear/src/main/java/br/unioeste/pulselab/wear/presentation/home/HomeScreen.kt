@@ -49,6 +49,11 @@ import br.unioeste.pulselab.wear.presentation.theme.PulseLabColors
 // until that is resolved. BiaScreen/BiaViewModel/BiaMeasurementManager are kept in
 // the tree, unreferenced, to be wired back once it works.
 
+private val REQUIRED_PERMISSIONS = arrayOf(
+    Manifest.permission.BODY_SENSORS,
+    Manifest.permission.ACTIVITY_RECOGNITION
+)
+
 @Composable
 fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     val context = LocalContext.current
@@ -62,9 +67,14 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     var isPermanentlyDenied by remember { mutableStateOf(false) }
     var permissionRequested by remember { mutableStateOf(false) }
 
+    // ACTIVITY_RECOGNITION is requested alongside BODY_SENSORS because the Samsung
+    // accelerometer tracker needs it, but the screen is NOT gated on it: without
+    // it the motion gate simply never flags a window, and the other five metrics
+    // are unaffected.
     val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val granted = results[Manifest.permission.BODY_SENSORS] == true
         if (granted) {
             hasPermission = true
         } else {
@@ -94,7 +104,7 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     } else {
         BodySensorsRationaleScreen(
             isPermanentlyDenied = isPermanentlyDenied,
-            onGrantPermission = { launcher.launch(Manifest.permission.BODY_SENSORS) },
+            onGrantPermission = { launcher.launch(REQUIRED_PERMISSIONS) },
             onOpenSettings = {
                 context.startActivity(
                     Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {

@@ -5,6 +5,12 @@
     <!-- Required to read the heart rate sensor (must also be requested at runtime in code) -->
     <uses-permission android:name="android.permission.BODY_SENSORS" />
     <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />
+    <!--
+         Required by the Samsung SDK accelerometer tracker: with BODY_SENSORS alone,
+         ACCELEROMETER_CONTINUOUS is listed as a capability but fails with
+         PERMISSION_ERROR (confirmed on SM-L705F, 2026-07-27).
+    -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <!-- Lets Health Services restart passive monitoring after a reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Keeps the Samsung SDK sensor stream alive with the screen off -->

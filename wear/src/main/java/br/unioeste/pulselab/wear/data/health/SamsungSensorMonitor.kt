@@ -91,12 +91,29 @@ class SamsungSensorMonitor(context: Context) {
                         val ibiList = dp.getValue(ValueKey.HeartRateSet.IBI_LIST) ?: emptyList()
                         val ibiStatus = dp.getValue(ValueKey.HeartRateSet.IBI_STATUS_LIST) ?: emptyList()
 
+                        // Raw IBI + status logged so the SDK's status semantics can be
+                        // confirmed on device: IBI_STATUS_VALID is still an assumption,
+                        // and it demonstrably lets artefacts through (see IbiWindow.add).
+                        Log.d(TAG, "HR=$hr status=$hrStatus ibi=$ibiList ibiStatus=$ibiStatus")
+
                         if (hrStatus == HR_STATUS_OFF_BODY) continue  // off-wrist → ignore
 
-                        // Keep only valid IBIs, else RMSSD and SI both explode.
+                        // IBI does NOT arrive at 1 Hz: on device (SM-L705F) 172 of 180
+                        // data points carried an empty list and a single one carried
+                        // 165 intervals at once. The SDK stamps that whole batch with
+                        // one timestamp, so stamping every interval with it would make
+                        // the batch enter and leave the sliding window as one block —
+                        // observed as the window collapsing from 115 samples to 4.
+                        //
+                        val endTimes = ibiEndTimes(ibiList, dp.getTimestamp())
+
+                        // Added oldest first, so the window's successive-difference
+                        // filter compares intervals in the order the heart produced them.
+                        // Keep only valid IBIs, else RMSSD and SI both explode. The
+                        // window applies the physiological filters on top of this flag.
                         ibiList.forEachIndexed { i, ibi ->
                             if (ibiStatus.getOrNull(i) == IBI_STATUS_VALID && ibi > 0) {
-                                ibiWindow.add(ibi.toDouble(), dp.getTimestamp())
+                                ibiWindow.add(ibi.toDouble(), endTimes[i])
                             }
                         }
 
@@ -108,7 +125,8 @@ class SamsungSensorMonitor(context: Context) {
                             Log.d(
                                 TAG,
                                 "HR=$hr RMSSD=${rmssd?.let { "%.1f".format(it) } ?: "—"} " +
-                                    "SI=${si?.let { "%.1f".format(it) } ?: "—"} over ${ibiWindow.size} IBIs, " +
+                                    "SI=${si?.let { "%.1f".format(it) } ?: "—"} over ${ibiWindow.size} IBIs " +
+                                    "(${ibiWindow.rejected} descartados), " +
                                     "motion=$moving p2p=${motionGate.peakToPeak()?.let { "%.0f".format(it) } ?: "—"}"
                             )
 
