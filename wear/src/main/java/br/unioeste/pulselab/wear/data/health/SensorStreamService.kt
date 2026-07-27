@@ -68,10 +68,12 @@ class SensorStreamService : Service() {
                             bpm = reading.bpm.toInt(),
                             hrv = reading.hrv,
                             spo2 = reading.spo2,
-                            stressIndex = reading.stressIndex,
                             skinTemp = reading.skinTemp,
-                            timestamp = reading.timestamp,
-                            isSimulated = false
+                            baevskySI = reading.baevskySI,
+                            edaTonic = reading.edaTonic,
+                            edaScrPerMin = reading.edaScrPerMin,
+                            motionFlag = reading.motionFlag,
+                            timestamp = reading.timestamp
                         )
                     )
                     SensorStreamStore.recordSend(ok)

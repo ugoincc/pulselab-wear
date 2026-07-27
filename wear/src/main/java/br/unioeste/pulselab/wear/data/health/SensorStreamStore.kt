@@ -1,23 +1,20 @@
 package br.unioeste.pulselab.wear.data.health
 
-import br.unioeste.pulselab.wear.model.HeartRateReading
+import br.unioeste.pulselab.wear.model.SensorReading
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Process-wide bridge between [SensorStreamService] and the UI, mirroring the
- * [PassiveHeartRateStore] pattern: the service streams Samsung SDK readings and
- * forwards them to the phone whether or not any UI is observing; the ViewModel
- * mirrors these flows into screen state when the app is open.
+ * Process-wide bridge between [SensorStreamService] and the UI: the service
+ * streams Samsung SDK readings and forwards them to the phone whether or not any
+ * UI is observing; the ViewModel mirrors these flows into screen state when the
+ * app is open.
  */
 object SensorStreamStore {
 
-    private val _latest = MutableStateFlow<HeartRateReading?>(null)
-    val latest: StateFlow<HeartRateReading?> = _latest.asStateFlow()
-
-    private val _readingsSent = MutableStateFlow(0)
-    val readingsSent: StateFlow<Int> = _readingsSent.asStateFlow()
+    private val _latest = MutableStateFlow<SensorReading?>(null)
+    val latest: StateFlow<SensorReading?> = _latest.asStateFlow()
 
     private val _phoneReachable = MutableStateFlow<Boolean?>(null)
     val phoneReachable: StateFlow<Boolean?> = _phoneReachable.asStateFlow()
@@ -25,13 +22,12 @@ object SensorStreamStore {
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
-    fun update(reading: HeartRateReading) {
+    fun update(reading: SensorReading) {
         _latest.value = reading
     }
 
     fun recordSend(success: Boolean) {
         _phoneReachable.value = success
-        if (success) _readingsSent.value += 1
     }
 
     fun setRunning(running: Boolean) {
@@ -40,7 +36,6 @@ object SensorStreamStore {
 
     fun reset() {
         _latest.value = null
-        _readingsSent.value = 0
         _phoneReachable.value = null
     }
 }

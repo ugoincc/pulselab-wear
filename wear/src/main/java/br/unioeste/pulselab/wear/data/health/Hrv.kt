@@ -55,7 +55,17 @@ class IbiWindow(private val windowMs: Long = DEFAULT_WINDOW_MS) {
     }
 
     /** RMSSD over the current window, or null if fewer than two intervals. */
-    fun currentRmssd(): Double? = rmssd(samples.map { it.ibiMs })
+    fun currentRmssd(): Double? = rmssd(currentIntervals())
+
+    /**
+     * The valid RR intervals currently in the window, oldest first. Exposed so
+     * [BaevskyStressIndex] derives SI from exactly the same filtered intervals
+     * that produced RMSSD — two features over one window, never two windows.
+     */
+    fun currentIntervals(): List<Double> = samples.map { it.ibiMs }
+
+    /** Baevsky SI over the current window, or null if the window is too short. */
+    fun currentStressIndex(): Double? = BaevskyStressIndex.compute(currentIntervals())
 
     val size: Int get() = samples.size
 

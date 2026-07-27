@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.android.gms.wearable.Wearable
 import br.unioeste.pulselab.wear.data.health.SensorStreamService
 import br.unioeste.pulselab.wear.data.health.SensorStreamStore
+import br.unioeste.pulselab.wear.model.SensorReading
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,15 +17,13 @@ import kotlinx.coroutines.launch
 sealed class HomeUiState {
     object Idle : HomeUiState()
 
+    /**
+     * [reading] is null until the first sample arrives, which is why the screen
+     * has to render empty orbs rather than wait for data.
+     */
     data class Monitoring(
-        val bpm: Double?,
-        val hrv: Int?,
-        val spo2: Int?,
-        val stressIndex: Int?,
-        val skinTemp: Double?,
-        val readingsSent: Int,
-        val phoneReachable: Boolean? = null,
-        val lastUpdate: Long? = null
+        val reading: SensorReading?,
+        val phoneReachable: Boolean? = null
     ) : HomeUiState()
 
     data class Error(val message: String) : HomeUiState()
@@ -56,29 +55,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startSession() {
         if (monitoringJob?.isActive == true) return
-        _uiState.value = HomeUiState.Monitoring(
-            bpm = null, hrv = null, spo2 = null, stressIndex = null, skinTemp = null,
-            readingsSent = 0
-        )
+        _uiState.value = HomeUiState.Monitoring(reading = null)
         SensorStreamService.start(getApplication())
 
         monitoringJob = viewModelScope.launch {
             combine(
                 SensorStreamStore.latest,
-                SensorStreamStore.readingsSent,
                 SensorStreamStore.phoneReachable
-            ) { reading, sent, reachable -> Triple(reading, sent, reachable) }
-                .collect { (reading, sent, reachable) ->
+            ) { reading, reachable -> reading to reachable }
+                .collect { (reading, reachable) ->
                     val current = _uiState.value as? HomeUiState.Monitoring ?: return@collect
                     _uiState.value = current.copy(
-                        bpm = reading?.bpm,
-                        hrv = reading?.hrv,
-                        spo2 = reading?.spo2,
-                        stressIndex = reading?.stressIndex,
-                        skinTemp = reading?.skinTemp,
-                        readingsSent = sent,
-                        phoneReachable = reachable,
-                        lastUpdate = reading?.timestamp
+                        reading = reading,
+                        phoneReachable = reachable
                     )
                 }
         }

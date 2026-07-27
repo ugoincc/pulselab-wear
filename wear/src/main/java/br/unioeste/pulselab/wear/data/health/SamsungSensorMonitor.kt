@@ -6,7 +6,7 @@ import com.samsung.android.service.health.tracking.HealthTracker
 import com.samsung.android.service.health.tracking.data.DataPoint
 import com.samsung.android.service.health.tracking.data.HealthTrackerType
 import com.samsung.android.service.health.tracking.data.ValueKey
-import br.unioeste.pulselab.wear.model.HeartRateReading
+import br.unioeste.pulselab.wear.model.SensorReading
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -21,43 +21,55 @@ private const val TAG = "SamsungSensorMonitor"
 // Data-point status integers. These are runtime values from the sensor, not part
 // of the .aar bytecode. Confirmed against on-device Logcat (SM-L705F, 2026-06-28):
 // each metric uses a DIFFERENT "valid" code, which is why on-device validation
-// was required (handoff §5/§10).
+// was required.
 private const val HR_STATUS_VALID = 1        // confirmed: reliable HR + IBI
-private const val HR_STATUS_OFF_BODY = -3    // watch off the wrist (handoff §9)
+private const val HR_STATUS_OFF_BODY = -3    // watch off the wrist
 private const val SPO2_STATUS_COMPLETED = 2  // confirmed: on-demand measurement finished
 private const val SKIN_TEMP_STATUS_VALID = 0 // confirmed: 0 == valid (NOT 1)
 
+/**
+ * PROVISIONAL: EDA has never been read on-device, so its "valid" status code is
+ * assumed to follow the skin-temperature convention (0 == valid). Every EDA sample
+ * is logged with its raw status so the first on-device run can confirm or correct
+ * this — the same validation that turned up skin temperature's 0 (not 1).
+ */
+private const val EDA_STATUS_VALID = 0
+
 // SpO2 is on-demand (one ~30 s measurement per arm), so re-arm periodically to
-// keep the value fresh while the Sensor source is active.
+// keep the value fresh.
 private const val SPO2_REARM_INTERVAL_MS = 60_000L
 
 /**
- * Foreground monitor backed by the Samsung Health Sensor SDK. Unlike Jetpack
- * Health Services, this gives us IBI (→ RMSSD/HRV), SpO2 and skin temperature.
+ * The watch's single source of biometrics, backed by the Samsung Health Sensor
+ * SDK. Emits one [SensorReading] per heart-rate sample (~1 Hz), carrying every
+ * channel the watch can read.
  *
- * Exposes a single [Flow] of [HeartRateReading] so it slots into the existing
- * pipeline: the ViewModel's foreground collector already displays each reading
- * and forwards it to the phone via WearDataSender (handoff §8 — one sender, one
- * payload, no new transport).
+ * Two of the six values are computed here rather than read: RMSSD ([IbiWindow])
+ * and the Baevsky Stress Index ([BaevskyStressIndex]), both over the same window
+ * of filtered IBI intervals. The accelerometer contributes no value of its own —
+ * it only sets [SensorReading.motionFlag] through [MotionGate], so the phone can
+ * exclude movement-contaminated windows from the composite index.
  *
- * Cadence model: HEART_RATE_CONTINUOUS (~1 Hz) is the driver. SpO2 (on-demand)
- * and skin temperature (continuous, slower) update shared "latest" values that
- * ride along on the next HR emission.
+ * Cadence model: HEART_RATE_CONTINUOUS (~1 Hz) is the driver. The slower or
+ * higher-rate channels (SpO2, skin temperature, EDA, accelerometer) update shared
+ * "latest" state that rides along on the next HR emission.
  */
 class SamsungSensorMonitor(context: Context) {
 
     private val appContext = context.applicationContext
 
     /**
-     * @param windowMs RMSSD sliding-window length (handoff §7, configurable).
+     * @param windowMs RMSSD/SI sliding-window length.
      */
     fun readingFlow(
         windowMs: Long = IbiWindow.DEFAULT_WINDOW_MS,
         spo2RearmMs: Long = SPO2_REARM_INTERVAL_MS
-    ): Flow<HeartRateReading> =
+    ): Flow<SensorReading> =
         callbackFlow {
             val connection = SensorConnectionManager(appContext)
             val ibiWindow = IbiWindow(windowMs)
+            val edaWindow = EdaWindow()
+            val motionGate = MotionGate()
 
             // Secondary metrics updated by their own trackers; attached to the
             // next HR emission. Single-threaded callbacks, so plain vars are fine.
@@ -67,6 +79,8 @@ class SamsungSensorMonitor(context: Context) {
             var hrTracker: HealthTracker? = null
             var spo2Tracker: HealthTracker? = null
             var skinTempTracker: HealthTracker? = null
+            var edaTracker: HealthTracker? = null
+            var accelTracker: HealthTracker? = null
             var spo2Job: Job? = null
 
             val hrListener = object : HealthTracker.TrackerEventListener {
@@ -77,12 +91,9 @@ class SamsungSensorMonitor(context: Context) {
                         val ibiList = dp.getValue(ValueKey.HeartRateSet.IBI_LIST) ?: emptyList()
                         val ibiStatus = dp.getValue(ValueKey.HeartRateSet.IBI_STATUS_LIST) ?: emptyList()
 
-                        // Raw log so on-device validation can confirm IBI + status semantics.
-                        Log.d(TAG, "HR=$hr status=$hrStatus ibi=$ibiList ibiStatus=$ibiStatus window=${ibiWindow.size}")
-
                         if (hrStatus == HR_STATUS_OFF_BODY) continue  // off-wrist → ignore
 
-                        // Keep only valid IBIs, else RMSSD explodes (handoff §6.1 / §11).
+                        // Keep only valid IBIs, else RMSSD and SI both explode.
                         ibiList.forEachIndexed { i, ibi ->
                             if (ibiStatus.getOrNull(i) == IBI_STATUS_VALID && ibi > 0) {
                                 ibiWindow.add(ibi.toDouble(), dp.getTimestamp())
@@ -91,16 +102,27 @@ class SamsungSensorMonitor(context: Context) {
 
                         if (hr != null && hr > 0 && hrStatus == HR_STATUS_VALID) {
                             val rmssd = ibiWindow.currentRmssd()
-                            Log.d(TAG, "RMSSD=${rmssd?.let { "%.1f".format(it) } ?: "—"} ms over ${ibiWindow.size} IBIs")
+                            val si = ibiWindow.currentStressIndex()
+                            val moving = motionGate.isMoving()
+
+                            Log.d(
+                                TAG,
+                                "HR=$hr RMSSD=${rmssd?.let { "%.1f".format(it) } ?: "—"} " +
+                                    "SI=${si?.let { "%.1f".format(it) } ?: "—"} over ${ibiWindow.size} IBIs, " +
+                                    "motion=$moving p2p=${motionGate.peakToPeak()?.let { "%.0f".format(it) } ?: "—"}"
+                            )
+
                             trySend(
-                                HeartRateReading(
+                                SensorReading(
                                     bpm = hr.toDouble(),
                                     hrv = rmssd?.roundToInt(),
                                     spo2 = latestSpo2,
-                                    stressIndex = null,
                                     skinTemp = latestSkinTemp,
-                                    timestamp = dp.getTimestamp(),
-                                    isSimulated = false
+                                    baevskySI = si,
+                                    edaTonic = edaWindow.tonicLevel(),
+                                    edaScrPerMin = edaWindow.scrPerMinute(),
+                                    motionFlag = moving,
+                                    timestamp = dp.getTimestamp()
                                 )
                             )
                         }
@@ -118,7 +140,6 @@ class SamsungSensorMonitor(context: Context) {
                     for (dp in dataPoints) {
                         val status = dp.getValue(ValueKey.SpO2Set.STATUS)
                         val spo2 = dp.getValue(ValueKey.SpO2Set.SPO2)
-                        Log.d(TAG, "SpO2 status=$status value=$spo2")
                         if (status == SPO2_STATUS_COMPLETED && spo2 != null && spo2 > 0) {
                             latestSpo2 = spo2
                         }
@@ -136,7 +157,6 @@ class SamsungSensorMonitor(context: Context) {
                     for (dp in dataPoints) {
                         val status = dp.getValue(ValueKey.SkinTemperatureSet.STATUS)
                         val temp = dp.getValue(ValueKey.SkinTemperatureSet.OBJECT_TEMPERATURE)
-                        Log.d(TAG, "SkinTemp status=$status temp=$temp")
                         if (status == SKIN_TEMP_STATUS_VALID && temp != null && temp > 0) {
                             latestSkinTemp = temp.toDouble()
                         }
@@ -149,36 +169,82 @@ class SamsungSensorMonitor(context: Context) {
                 }
             }
 
+            val edaListener = object : HealthTracker.TrackerEventListener {
+                override fun onDataReceived(dataPoints: List<DataPoint>) {
+                    for (dp in dataPoints) {
+                        val status = dp.getValue(ValueKey.EdaSet.STATUS)
+                        val conductance = dp.getValue(ValueKey.EdaSet.SKIN_CONDUCTANCE)
+                        // Logged unconditionally: EDA_STATUS_VALID is still a guess.
+                        Log.d(TAG, "EDA status=$status skinConductance=$conductance")
+                        if (status == EDA_STATUS_VALID && conductance != null && conductance > 0f) {
+                            edaWindow.add(conductance.toDouble(), dp.getTimestamp())
+                        }
+                    }
+                }
+
+                override fun onFlushCompleted() {}
+                override fun onError(error: HealthTracker.TrackerError) {
+                    Log.e(TAG, "EDA tracker error: $error")
+                }
+            }
+
+            val accelListener = object : HealthTracker.TrackerEventListener {
+                override fun onDataReceived(dataPoints: List<DataPoint>) {
+                    for (dp in dataPoints) {
+                        val x = dp.getValue(ValueKey.AccelerometerSet.ACCELEROMETER_X)
+                        val y = dp.getValue(ValueKey.AccelerometerSet.ACCELEROMETER_Y)
+                        val z = dp.getValue(ValueKey.AccelerometerSet.ACCELEROMETER_Z)
+                        if (x != null && y != null && z != null) {
+                            motionGate.add(x, y, z, dp.getTimestamp())
+                        }
+                    }
+                }
+
+                override fun onFlushCompleted() {}
+                override fun onError(error: HealthTracker.TrackerError) {
+                    Log.e(TAG, "Accelerometer tracker error: $error")
+                }
+            }
+
             connection.onConnected = {
                 val supported = connection.supportedTypes()
 
-                // Capability check is the definitive gate (handoff §5): only start
-                // trackers this watch actually reports.
-                if (HealthTrackerType.HEART_RATE_CONTINUOUS in supported) {
-                    hrTracker = connection.tracker(HealthTrackerType.HEART_RATE_CONTINUOUS)
-                        ?.also { it.setEventListener(hrListener) }
-                } else {
-                    Log.w(TAG, "HEART_RATE_CONTINUOUS not supported on this device")
+                // Capability check is the definitive gate: only start trackers this
+                // watch actually reports. getHealthTracker can still reject a type
+                // the capability list advertises (BIA does exactly that on the
+                // Galaxy Watch Ultra), so every instantiation is also guarded.
+                fun startContinuous(
+                    type: HealthTrackerType,
+                    listener: HealthTracker.TrackerEventListener
+                ): HealthTracker? {
+                    if (type !in supported) {
+                        Log.w(TAG, "$type not supported on this device")
+                        return null
+                    }
+                    return runCatching {
+                        connection.tracker(type)?.also { it.setEventListener(listener) }
+                    }.onFailure {
+                        Log.e(TAG, "Could not start $type", it)
+                    }.getOrNull()
                 }
 
-                if (HealthTrackerType.SKIN_TEMPERATURE_CONTINUOUS in supported) {
-                    skinTempTracker = connection.tracker(HealthTrackerType.SKIN_TEMPERATURE_CONTINUOUS)
-                        ?.also { it.setEventListener(skinTempListener) }
-                } else {
-                    Log.w(TAG, "SKIN_TEMPERATURE_CONTINUOUS not supported on this device")
-                }
+                hrTracker = startContinuous(HealthTrackerType.HEART_RATE_CONTINUOUS, hrListener)
+                skinTempTracker = startContinuous(HealthTrackerType.SKIN_TEMPERATURE_CONTINUOUS, skinTempListener)
+                edaTracker = startContinuous(HealthTrackerType.EDA_CONTINUOUS, edaListener)
+                accelTracker = startContinuous(HealthTrackerType.ACCELEROMETER_CONTINUOUS, accelListener)
 
-                // SpO2 is on-demand (handoff §9): each arm yields one ~30 s measurement,
-                // so re-arm on a loop to keep it fresh. Only one on-demand tracker may
+                // SpO2 is on-demand: each arm yields one ~30 s measurement, so
+                // re-arm on a loop to keep it fresh. Only one on-demand tracker may
                 // run at a time. The loop is a child of the flow scope, so it is
                 // cancelled automatically when collection stops.
                 if (HealthTrackerType.SPO2_ON_DEMAND in supported) {
                     spo2Job = this@callbackFlow.launch {
                         while (isActive) {
                             spo2Tracker?.unsetEventListener()
-                            spo2Tracker = connection.tracker(HealthTrackerType.SPO2_ON_DEMAND)
-                                ?.also { it.setEventListener(spo2Listener) }
-                            Log.d(TAG, "SpO2 on-demand measurement armed")
+                            spo2Tracker = runCatching {
+                                connection.tracker(HealthTrackerType.SPO2_ON_DEMAND)
+                                    ?.also { it.setEventListener(spo2Listener) }
+                            }.getOrNull()
                             delay(spo2RearmMs)
                         }
                     }
@@ -199,6 +265,8 @@ class SamsungSensorMonitor(context: Context) {
                 hrTracker?.unsetEventListener()
                 spo2Tracker?.unsetEventListener()
                 skinTempTracker?.unsetEventListener()
+                edaTracker?.unsetEventListener()
+                accelTracker?.unsetEventListener()
                 connection.disconnect()
                 Log.d(TAG, "Monitor closed — trackers unset, service disconnected")
             }
