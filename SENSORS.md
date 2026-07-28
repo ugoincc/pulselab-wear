@@ -72,6 +72,27 @@ Quatro coisas que só apareceram com o relógio no pulso, todas já corrigidas:
    artefatos (Task Force, 1996). O SI não precisa disso: sai de um histograma de
    comprimentos, que não depende da ordem dos batimentos.
 
+   **A primeira versão da quebra estava errada** e vale registrar por quê. Ela
+   testava a sucessão exatamente, perguntando se `atMs[i] − atMs[i−1]` batia com
+   `ibiMs[i]`. Em dados reais isso desaba: o SDK entrega **um intervalo por
+   datapoint em 95 % das vezes** (247 de 261 medidos), e os datapoints são
+   carimbados de 1000 em 1000 ms enquanto os batimentos distam ~750 ms. O
+   `ibiEndTimes` ancora cada lote no timestamp do datapoint, que é quando ele foi
+   *entregue*, não quando o último batimento terminou — então a conta nunca
+   encadeia entre lotes. Cada batimento virou seu próprio trecho e o RMSSD
+   congelou. A regra agora é grossa de propósito: quebra quem sabe que perdeu
+   batimento (os filtros, e o `noteDropped()` para os que o SDK marca inválidos) e
+   um silêncio maior que `RUN_BREAK_GAP_MS`, que é o dropout de ~11 s.
+
+   Medido depois da correção (relógio vestido, repouso, 5 min, amostrado uma vez
+   por segundo de relógio de parede): n = 487, p25 = 51, p50 = 57, p75 = 57,
+   máx = 61 ms, 50 valores distintos. Faixa fisiológica e distribuição saudável.
+
+   **Armadilha de medição, de novo:** as duas primeiras leituras deram "um único
+   valor" e pareciam degeneradas. Não eram — eu agregava um *burst* de entrega, em
+   que centenas de linhas saem no mesmo instante com a mesma janela. Contar linhas
+   de log não é contar tempo. Amostrar por segundo de relógio de parede resolve.
+
 ### Fora do fluxo, para retomar depois
 
 | Métrica | Fonte | Situação |
@@ -336,10 +357,8 @@ motivo que não tem a ver com a tela.
       da correção do RMSSD nos vãos. Os valores de RMSSD dela saíram de uma
       janela que ainda somava pares atravessando buraco, então a média está
       levemente inflada. Recapturar depois de confirmar a correção em device.
-- [ ] **Confirmar a correção do RMSSD em device.** Coberta por teste unitário e
-      já instalada, mas a medição de comparação não saiu: o relógio estava fora do
-      pulso (`status=-3` em 35 de 72 amostras). Repetir vestido e comparar a
-      distribuição de RMSSD em repouso com a de antes (p50 ≈ 42 ms).
+- [x] ~~Confirmar a correção do RMSSD em device~~ — p50 = 57 ms em repouso, 50
+      valores distintos, distribuição saudável (§2.1, item 5).
 
 ### Operacional
 

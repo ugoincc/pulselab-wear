@@ -139,6 +139,11 @@ class SamsungSensorMonitor(context: Context) {
                         ibiList.forEachIndexed { i, ibi ->
                             if (ibiStatus.getOrNull(i) == IBI_STATUS_VALID && ibi > 0) {
                                 ibiWindow.add(ibi.toDouble(), endTimes[i])
+                            } else {
+                                // Tell the window a beat is missing here, so it does
+                                // not pair the intervals either side of the hole as
+                                // if they had followed one another.
+                                ibiWindow.noteDropped()
                             }
                         }
 

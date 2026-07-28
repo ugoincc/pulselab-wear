@@ -19,15 +19,24 @@ import kotlin.math.sqrt
 const val IBI_STATUS_VALID = 0
 
 /**
- * Largest mismatch tolerated between how far apart two intervals actually sit and
- * how long the later one lasted, for the pair to count as successive.
+ * How long the window may go without an accepted interval before the beats on
+ * either side stop counting as consecutive.
  *
- * Two beats are successive when the later interval starts exactly where the
- * earlier one ended, so `atMs[i] - atMs[i-1]` should equal `ibiMs[i]`. Interval
- * end times are reconstructed by [ibiEndTimes], which is exact within a batch, so
- * the slack only absorbs rounding across batch boundaries.
+ * Deliberately coarse. An earlier attempt tested succession exactly, asking
+ * whether `atMs[i] - atMs[i-1]` matched `ibiMs[i]`, and it collapsed on real
+ * data: the SDK delivers one interval per data point 95 % of the time (247 of 261
+ * measured), and those data points are stamped 1000 ms apart while the interval
+ * between the beats is ~750 ms. [ibiEndTimes] anchors each batch on the data
+ * point's timestamp, which is when it was *delivered*, not when the last beat
+ * ended, so the arithmetic never chains across batches. Every beat became its own
+ * run, almost no pair survived, and RMSSD froze at one value.
+ *
+ * Beat-level breaks are reported directly by whoever drops a beat — see
+ * [IbiWindow.noteDropped] and the filters inside [IbiWindow.add]. This threshold
+ * only has to catch what nobody reports: the sensor going quiet, which on device
+ * lasts ~11 s (SENSORS.md §4.3). Normal delivery never exceeds ~2 s.
  */
-const val SUCCESSION_SLACK_MS = 100.0
+const val RUN_BREAK_GAP_MS = 3_000L
 
 /**
  * RMSSD (root mean square of successive differences) over a list of valid
@@ -110,13 +119,18 @@ fun ibiEndTimes(intervalsMs: List<Int>, batchEndMs: Long): LongArray {
  */
 class IbiWindow(private val windowMs: Long = DEFAULT_WINDOW_MS) {
 
-    private data class Sample(val atMs: Long, val ibiMs: Double)
+    /** [startsRun] marks a beat that did not follow the one before it. */
+    private data class Sample(val atMs: Long, val ibiMs: Double, val startsRun: Boolean)
 
     private val samples = ArrayDeque<Sample>()
 
     /** Last interval that passed the filters — the reference for the Malik rule. */
     private var lastAccepted: Double? = null
+    private var lastAcceptedAtMs: Long? = null
     private var consecutiveRejections = 0
+
+    /** A beat was dropped since the last accepted one, so the chain is broken. */
+    private var chainBroken = true
 
     /**
      * Filter counters since the session began, for on-device diagnosis.
@@ -161,6 +175,7 @@ class IbiWindow(private val windowMs: Long = DEFAULT_WINDOW_MS) {
     fun add(ibiMs: Double, atMs: Long): Boolean {
         if (ibiMs < MIN_PLAUSIBLE_IBI_MS || ibiMs > MAX_PLAUSIBLE_IBI_MS) {
             rejected++
+            noteDropped()
             return false
         }
 
@@ -171,18 +186,38 @@ class IbiWindow(private val windowMs: Long = DEFAULT_WINDOW_MS) {
         ) {
             consecutiveRejections++
             rejected++
+            noteDropped()
             return false
         }
 
+        // A beat follows the previous one unless something was dropped in between
+        // or the sensor went quiet for long enough that beats must have been lost.
+        val quietTooLong = lastAcceptedAtMs?.let { atMs - it > RUN_BREAK_GAP_MS } ?: true
+        val startsRun = chainBroken || quietTooLong
+
         consecutiveRejections = 0
+        chainBroken = false
         lastAccepted = ibiMs
+        lastAcceptedAtMs = atMs
         accepted++
-        samples.addLast(Sample(atMs, ibiMs))
+        samples.addLast(Sample(atMs, ibiMs, startsRun))
         val cutoff = atMs - windowMs
         while (samples.isNotEmpty() && samples.first().atMs < cutoff) {
             samples.removeFirst()
         }
         return true
+    }
+
+    /**
+     * Reports a beat that never reached [add] — an interval the SDK itself flagged
+     * invalid.
+     *
+     * Those are dropped before the window ever sees them, so without this the
+     * window would pair the beats either side of the hole as if they had followed
+     * one another.
+     */
+    fun noteDropped() {
+        chainBroken = true
     }
 
     /**
@@ -194,27 +229,22 @@ class IbiWindow(private val windowMs: Long = DEFAULT_WINDOW_MS) {
     /**
      * The window split into runs of consecutive beats, oldest first.
      *
-     * A run breaks wherever the next interval does not start where the previous
-     * one ended — because an artefact was filtered out, or because the sensor
-     * stopped returning valid data for a while. On device the second case is the
-     * common one: the heart-rate tracker goes quiet for ~11 s about once a minute
-     * (SENSORS.md §4.3), which puts one hole in almost every 60 s window.
+     * A run breaks wherever a beat is known to be missing: an interval the filters
+     * rejected, one the SDK flagged invalid ([noteDropped]), or a silence longer
+     * than [RUN_BREAK_GAP_MS]. On device the last case is the common one — the
+     * heart-rate tracker goes quiet for ~11 s about once a minute (SENSORS.md
+     * §4.3), which puts one hole in almost every 60 s window.
      */
     fun currentRuns(): List<List<Double>> {
         val runs = mutableListOf<List<Double>>()
         var run = mutableListOf<Double>()
-        var previous: Sample? = null
 
         for (sample in samples) {
-            val prior = previous
-            val consecutive = prior != null &&
-                abs((sample.atMs - prior.atMs) - sample.ibiMs) <= SUCCESSION_SLACK_MS
-            if (!consecutive && run.isNotEmpty()) {
+            if (sample.startsRun && run.isNotEmpty()) {
                 runs += run
                 run = mutableListOf()
             }
             run += sample.ibiMs
-            previous = sample
         }
         if (run.isNotEmpty()) runs += run
         return runs
@@ -239,6 +269,8 @@ class IbiWindow(private val windowMs: Long = DEFAULT_WINDOW_MS) {
     fun clear() {
         samples.clear()
         lastAccepted = null
+        lastAcceptedAtMs = null
+        chainBroken = true
         consecutiveRejections = 0
         rejected = 0
         accepted = 0

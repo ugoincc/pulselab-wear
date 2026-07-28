@@ -2,6 +2,7 @@ package br.unioeste.pulselab.wear.data.health
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -115,7 +116,7 @@ class HrvTest {
         // The dropout measured on device: the heart-rate tracker returns nothing
         // valid for ~11 s, about once a minute (SENSORS.md §4.3). Beats either
         // side of it are adjacent in the list and 11 s apart in the heart.
-        val window = IbiWindow()
+        val window = IbiWindow(windowMs = 60_000L)
         var atMs = 0L
         repeat(3) {
             atMs += 800L
@@ -130,6 +131,36 @@ class HrvTest {
         val runs = window.currentRuns()
         assertEquals("the hole should break the window in two", 2, runs.size)
         assertEquals(6, runs.sumOf { it.size })
+    }
+
+    @Test
+    fun `one interval per data point still counts as one run`() {
+        // How the SDK actually delivers: 247 of 261 data points carried exactly one
+        // interval, stamped ~1000 ms apart while the beats are ~750 ms apart. An
+        // earlier version tested succession with that arithmetic and split every
+        // beat into its own run, leaving RMSSD frozen on a handful of pairs.
+        val window = IbiWindow()
+        var atMs = 0L
+        repeat(10) {
+            atMs += 1_000L
+            window.add(750.0 + (it % 3) * 5, atMs)
+        }
+
+        val runs = window.currentRuns()
+        assertEquals("uninterrupted delivery is a single run", 1, runs.size)
+        assertEquals(10, runs.first().size)
+        assertNotNull("RMSSD must exist over normal delivery", window.currentRmssd())
+    }
+
+    @Test
+    fun `an interval the SDK flagged invalid breaks the run`() {
+        val window = IbiWindow()
+        window.add(800.0, atMs = 1_000L)
+        window.add(805.0, atMs = 2_000L)
+        window.noteDropped() // the SDK reported an interval with a bad status
+        window.add(802.0, atMs = 3_000L)
+
+        assertEquals(2, window.currentRuns().size)
     }
 
     @Test
