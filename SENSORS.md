@@ -58,6 +58,19 @@ Quatro coisas que só apareceram com o relógio no pulso, todas já corrigidas:
    descrevem o índice bruto; com a transformação, um repouso de ~44 aparecia como
    6,6 e parecia quebrado. O `sqrt` pertence ao pipeline estatístico offline, onde
    normalidade importa — não ao valor exibido.
+5. **RMSSD não pode atravessar vãos.** É a raiz da média dos quadrados das
+   diferenças *sucessivas*, então cada par somado precisa ser dois batimentos que
+   de fato se seguiram. Um vão na série — artefato filtrado, ou o silêncio
+   periódico do sensor (§4.3) — deixa os batimentos dos dois lados adjacentes na
+   lista sem serem adjacentes no coração, e o par inventa uma diferença que nunca
+   foi observada. `IbiWindow.currentRuns()` quebra a janela em trechos de
+   batimentos realmente consecutivos (`atMs[i] − atMs[i−1] ≈ ibiMs[i]`, folga de
+   `SUCCESSION_SLACK_MS`) e `rmssdOverRuns` agrupa as diferenças de todos eles —
+   uma por par legítimo, nenhuma atravessando buraco. Agrupar em vez de tirar
+   média por trecho mantém todo par com o mesmo peso, senão um trecho de dois
+   batimentos pesaria tanto quanto um de cinquenta. Tratamento padrão de edição de
+   artefatos (Task Force, 1996). O SI não precisa disso: sai de um histograma de
+   comprimentos, que não depende da ordem dos batimentos.
 
 ### Fora do fluxo, para retomar depois
 
@@ -312,12 +325,21 @@ motivo que não tem a ver com a tela.
 - [x] ~~Lacunas na série~~ — não é a tela nem o transporte: o tracker de FC
       responde `status=0` por ~11 s a cada minuto (§4.3).
 - [ ] **Confirmar que o tracker de temperatura causa o buraco periódico**:
-      desligá-lo e remedir. Se sumir, decidir explicitamente entre temperatura e
-      HRV sem furos — hoje se está pagando ~18 % da série por uma medida que muda
-      de valor uma vez por minuto.
+      desligá-lo e remedir. **Adiado por decisão do orientando (2026-07-28)**: a
+      temperatura não entra no índice composto. Vale registrar a ressalva de que a
+      pergunta não era sobre o valor da temperatura como medida, e sim sobre o
+      preço do tracker dela — ~18 % da série de HRV, que entra no índice. Se em
+      algum momento a cobertura da HRV virar um problema, este é o primeiro lugar
+      para olhar.
 - [ ] **Baseline capturada em 2026-07-28** (RMSSD 50,6 ± 8,5; SI 74,1 ± 13,4;
-      n = 231): é de uma sessão só e de um participante. Repetir em dias
-      diferentes antes de tratar como referência estável.
+      n = 231): é de uma sessão só e de um participante, e foi capturada **antes**
+      da correção do RMSSD nos vãos. Os valores de RMSSD dela saíram de uma
+      janela que ainda somava pares atravessando buraco, então a média está
+      levemente inflada. Recapturar depois de confirmar a correção em device.
+- [ ] **Confirmar a correção do RMSSD em device.** Coberta por teste unitário e
+      já instalada, mas a medição de comparação não saiu: o relógio estava fora do
+      pulso (`status=-3` em 35 de 72 amostras). Repetir vestido e comparar a
+      distribuição de RMSSD em repouso com a de antes (p50 ≈ 42 ms).
 
 ### Operacional
 

@@ -19,9 +19,25 @@ import kotlin.math.sqrt
 const val IBI_STATUS_VALID = 0
 
 /**
+ * Largest mismatch tolerated between how far apart two intervals actually sit and
+ * how long the later one lasted, for the pair to count as successive.
+ *
+ * Two beats are successive when the later interval starts exactly where the
+ * earlier one ended, so `atMs[i] - atMs[i-1]` should equal `ibiMs[i]`. Interval
+ * end times are reconstructed by [ibiEndTimes], which is exact within a batch, so
+ * the slack only absorbs rounding across batch boundaries.
+ */
+const val SUCCESSION_SLACK_MS = 100.0
+
+/**
  * RMSSD (root mean square of successive differences) over a list of valid
  * inter-beat intervals in milliseconds. Returns null when there are fewer than
  * two intervals (RMSSD is undefined). See Jayasinghe & Torres (2023).
+ *
+ * Treats the list as one uninterrupted run of beats. When the series may have
+ * holes — rejected artefacts, or the sensor's periodic ~11 s dropout (SENSORS.md
+ * §4.3) — use [rmssdOverRuns] instead, or the difference across the hole enters
+ * the sum as if it were a successive pair.
  */
 fun rmssd(ibiMs: List<Double>): Double? {
     if (ibiMs.size < 2) return null
@@ -31,6 +47,36 @@ fun rmssd(ibiMs: List<Double>): Double? {
         sumSq += diff * diff
     }
     return sqrt(sumSq / (ibiMs.size - 1))
+}
+
+/**
+ * RMSSD pooled over runs of genuinely consecutive beats.
+ *
+ * RMSSD is defined on *successive* differences, so every pair it sums has to be
+ * two beats that actually followed one another. A gap in the series — whether a
+ * filtered-out artefact or the sensor's periodic dropout — makes the beats on
+ * either side adjacent in the list without being adjacent in the heart, and
+ * pairing them fabricates a difference that was never observed.
+ *
+ * The standard treatment is to break the series at each discontinuity and pool
+ * the successive differences of the surviving runs (Task Force, 1996, §on editing
+ * artefacts): one difference per genuinely consecutive pair, none across a hole.
+ * Pooling rather than averaging per-run values keeps every pair weighted equally,
+ * so a two-beat run does not count as much as a fifty-beat one.
+ *
+ * Returns null when no run contributes a pair.
+ */
+fun rmssdOverRuns(runs: List<List<Double>>): Double? {
+    var sumSq = 0.0
+    var pairs = 0
+    for (run in runs) {
+        for (i in 1 until run.size) {
+            val diff = run[i] - run[i - 1]
+            sumSq += diff * diff
+            pairs++
+        }
+    }
+    return if (pairs == 0) null else sqrt(sumSq / pairs)
 }
 
 /**
@@ -139,13 +185,49 @@ class IbiWindow(private val windowMs: Long = DEFAULT_WINDOW_MS) {
         return true
     }
 
-    /** RMSSD over the current window, or null if fewer than two intervals. */
-    fun currentRmssd(): Double? = rmssd(currentIntervals())
+    /**
+     * RMSSD over the current window, computed only across genuinely consecutive
+     * beats. Null when no pair in the window qualifies.
+     */
+    fun currentRmssd(): Double? = rmssdOverRuns(currentRuns())
+
+    /**
+     * The window split into runs of consecutive beats, oldest first.
+     *
+     * A run breaks wherever the next interval does not start where the previous
+     * one ended — because an artefact was filtered out, or because the sensor
+     * stopped returning valid data for a while. On device the second case is the
+     * common one: the heart-rate tracker goes quiet for ~11 s about once a minute
+     * (SENSORS.md §4.3), which puts one hole in almost every 60 s window.
+     */
+    fun currentRuns(): List<List<Double>> {
+        val runs = mutableListOf<List<Double>>()
+        var run = mutableListOf<Double>()
+        var previous: Sample? = null
+
+        for (sample in samples) {
+            val prior = previous
+            val consecutive = prior != null &&
+                abs((sample.atMs - prior.atMs) - sample.ibiMs) <= SUCCESSION_SLACK_MS
+            if (!consecutive && run.isNotEmpty()) {
+                runs += run
+                run = mutableListOf()
+            }
+            run += sample.ibiMs
+            previous = sample
+        }
+        if (run.isNotEmpty()) runs += run
+        return runs
+    }
 
     /**
      * The valid RR intervals currently in the window, oldest first. Exposed so
      * [BaevskyStressIndex] derives SI from exactly the same filtered intervals
      * that produced RMSSD — two features over one window, never two windows.
+     *
+     * Flat and gap-blind on purpose: SI comes from a histogram of interval
+     * lengths, which does not care what order the beats arrived in, so the runs
+     * that matter to RMSSD are irrelevant here.
      */
     fun currentIntervals(): List<Double> = samples.map { it.ibiMs }
 

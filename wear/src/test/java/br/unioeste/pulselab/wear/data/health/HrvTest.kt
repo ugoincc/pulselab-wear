@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.sqrt
 
 class HrvTest {
 
@@ -89,6 +90,68 @@ class HrvTest {
         }
 
         assertTrue("window should eventually accept the new level", accepted > 0)
+    }
+
+    @Test
+    fun `rmssd over runs ignores the pair that straddles a gap`() {
+        // One run of 800/810 and another of 700/705. Pooled, the only differences
+        // are 10 and 5 — the 110 ms step between the runs was never a beat-to-beat
+        // change and must not appear.
+        val pooled = rmssdOverRuns(listOf(listOf(800.0, 810.0), listOf(700.0, 705.0)))!!
+        val flat = rmssd(listOf(800.0, 810.0, 700.0, 705.0))!!
+
+        assertEquals(sqrt((10.0 * 10.0 + 5.0 * 5.0) / 2), pooled, 1e-9)
+        assertTrue("flattening the gap inflates RMSSD ($flat vs $pooled)", flat > pooled * 3)
+    }
+
+    @Test
+    fun `rmssd over runs is null when no run has a pair`() {
+        assertNull(rmssdOverRuns(listOf(listOf(800.0), listOf(700.0))))
+        assertNull(rmssdOverRuns(emptyList()))
+    }
+
+    @Test
+    fun `window splits into runs at the sensor's periodic dropout`() {
+        // The dropout measured on device: the heart-rate tracker returns nothing
+        // valid for ~11 s, about once a minute (SENSORS.md §4.3). Beats either
+        // side of it are adjacent in the list and 11 s apart in the heart.
+        val window = IbiWindow()
+        var atMs = 0L
+        repeat(3) {
+            atMs += 800L
+            window.add(800.0, atMs)
+        }
+        atMs += 11_000L // the hole
+        repeat(3) {
+            window.add(800.0, atMs)
+            atMs += 800L
+        }
+
+        val runs = window.currentRuns()
+        assertEquals("the hole should break the window in two", 2, runs.size)
+        assertEquals(6, runs.sumOf { it.size })
+    }
+
+    @Test
+    fun `a resumed run at a different rate does not fabricate a difference`() {
+        // Heart rate drifts across an 11 s dropout — perfectly normal. Pairing the
+        // last beat before with the first after would invent a 150 ms successive
+        // difference and inflate RMSSD, which is squared and so dominates.
+        val window = IbiWindow()
+        var atMs = 0L
+        listOf(800.0, 805.0, 800.0).forEach { atMs += it.toLong(); window.add(it, atMs) }
+        atMs += 11_000L
+        // 650 ms is a >20 % step, so the Malik rule needs a few beats to re-anchor.
+        repeat(IbiWindow.MAX_CONSECUTIVE_REJECTIONS + 3) {
+            atMs += 650L
+            window.add(650.0, atMs)
+        }
+
+        val rmssdValue = window.currentRmssd()!!
+        assertTrue(
+            "no successive pair differs by more than a few ms, was $rmssdValue",
+            rmssdValue < 20.0
+        )
     }
 
     @Test
