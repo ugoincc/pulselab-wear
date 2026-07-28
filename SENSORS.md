@@ -22,7 +22,7 @@
 |---|---|---|---|
 | Frequência cardíaca | Sensor SDK `HEART_RATE_CONTINUOUS` (~1 Hz) | Driver da cadência de envio. (Fontes alternativas via Health Services foram removidas na simplificação para relay — histórico no git) | ✅ validado no relógio |
 | HRV (RMSSD) | Calculado localmente do IBI (`IBI_LIST` do Sensor SDK), janela deslizante — `Hrv.kt` | Não existe HRV pronto em nenhum SDK | ✅ validado |
-| SpO2 | Sensor SDK `SPO2_ON_DEMAND`, rearmado a cada 60 s | Cada medição leva ~30 s | ✅ validado |
+| SpO2 | Sensor SDK `SPO2_ON_DEMAND`, rearmado a cada **5 min** | Cada medição leva ~30 s com os LEDs acesos. Era 60 s, o que deixava o sensor óptico ligado ~50 % do tempo por um número que muda pouco em repouso — ver §6 | ✅ validado |
 | Temperatura de pele | Sensor SDK `SKIN_TEMPERATURE_CONTINUOUS` | Status `0` = válido (confirmado em device) | ✅ validado |
 | **SI de Baevsky** | Calculado do mesmo `IBI_LIST` que alimenta o RMSSD — `BaevskyStressIndex.kt` | `SI = AMo / (2·Mo·MxDMn)`, com detrend por média móvel centrada. **Escala bruta, sem `sqrt`** — as faixas de referência de Baevsky (50–150 repouso) descrevem o índice bruto | ✅ validado: 55,5 em repouso |
 | **Gate de movimento** | Sensor SDK `ACCELEROMETER_CONTINUOUS` → `MotionGate.kt` | Não é feature de estresse: marca `motionFlag` por janela de 1 s via pico-a-pico da magnitude do vetor. O dado segue sendo enviado e armazenado — o flag só diz ao celular quais janelas excluir do índice. **Exige `ACTIVITY_RECOGNITION`** | ✅ funcional; limiar ainda precisa de calibração com o relógio vestido |
@@ -63,9 +63,10 @@ Quatro coisas que só apareceram com o relógio no pulso, todas já corrigidas:
    de fato se seguiram. Um vão na série — artefato filtrado, ou o silêncio
    periódico do sensor (§4.3) — deixa os batimentos dos dois lados adjacentes na
    lista sem serem adjacentes no coração, e o par inventa uma diferença que nunca
-   foi observada. `IbiWindow.currentRuns()` quebra a janela em trechos de
-   batimentos realmente consecutivos (`atMs[i] − atMs[i−1] ≈ ibiMs[i]`, folga de
-   `SUCCESSION_SLACK_MS`) e `rmssdOverRuns` agrupa as diferenças de todos eles —
+   foi observada. `IbiWindow.currentRuns()` quebra a janela onde se **sabe** que
+   um batimento faltou — um intervalo rejeitado pelos filtros, um marcado inválido
+   pelo SDK (`noteDropped()`), ou um silêncio maior que `RUN_BREAK_GAP_MS` — e
+   `rmssdOverRuns` agrupa as diferenças de todos os trechos —
    uma por par legítimo, nenhuma atravessando buraco. Agrupar em vez de tirar
    média por trecho mantém todo par com o mesmo peso, senão um trecho de dois
    batimentos pesaria tanto quanto um de cinquenta. Tratamento padrão de edição de
@@ -121,11 +122,13 @@ para dados reais. Estão no histórico do git se voltarem a ser necessários.
 > de curto prazo, outra de concentração do histograma) sobre o mesmo sinal.
 >
 > Decisão tomada em 2026-07-27: **aceitar como limitação declarada**, sem trocar
-> de hardware. O código do EDA permanece na árvore, dormente e ligado ponta a
-> ponta (`EdaWindow`, tracker, campos `edaTonic`/`edaScrPerMin` no payload,
-> feature no app do celular) — o que falta é sensor, não código. Num Watch8 a
-> feature volta sozinha, e o celular já renormaliza os pesos conforme as features
-> presentes.
+> de hardware. A matemática do EDA permanece na árvore, dormente e coberta por
+> testes (`EdaFeatures.kt`), e os campos `edaTonic`/`edaScrPerMin` seguem no
+> payload e no app do celular, sempre nulos — o contrato entre os dois apps não
+> muda quando um relógio com EDA aparecer. **O tracker foi removido em
+> 2026-07-28** (§6): tentar iniciar um sensor que não existe só gerava um aviso no
+> log. Num Watch8, religar são duas linhas, e o celular já renormaliza os pesos
+> conforme as features presentes.
 
 ## 2.1 Faixas de interpretação
 
@@ -360,12 +363,6 @@ motivo que não tem a ver com a tela.
 - [x] ~~Confirmar a correção do RMSSD em device~~ — p50 = 57 ms em repouso, 50
       valores distintos, distribuição saudável (§2.1, item 5).
 
-### Operacional
-
-- [ ] Medir consumo de bateria com EDA + acelerômetro contínuos rodando junto de HR/IBI/SpO2/temperatura.
-- [ ] Decidir cadência de envio (1/s é caro em Bluetooth; considerar lote a cada 5–10 s — agora com 9 campos por payload em vez de 6).
-- [ ] Iniciar processo de parceria Samsung antes de qualquer distribuição (vale para EDA e acelerômetro também).
-
 ### Retomar depois
 
 - [ ] **BIA indisponível no Galaxy Watch Ultra via SDK**: a capability lista `BIA_ON_DEMAND`, mas `getHealthTracker(BIA_ON_DEMAND)` lança `Invalid HealthTrackerType`. Código mantido na árvore, sem entrada na UI. Investigar: pode exigir outra forma de instanciar, versão de Health Platform, ou ser recorte do modelo/região.
@@ -382,3 +379,35 @@ motivo que não tem a ver com a tela.
       recebendo dados ao vivo, mas os 5 min de repouso nunca foram gravados — sem
       isso o índice composto não tem referência e os cortes de faixa (±0,5)
       seguem provisórios.
+
+## 6. Consumo de bateria
+
+Enquanto o `SensorStreamService` roda, o relógio mantém ligados: FC+IBI contínuo
+(1 Hz, a matéria-prima), temperatura de pele contínua, acelerômetro contínuo, e
+o SpO2 rearmado periodicamente. Além disso o serviço segura um
+`PARTIAL_WAKE_LOCK` por até 1 h seguida, o que impede a CPU de dormir.
+
+**Nenhuma medida limpa existe ainda.** Observou-se ~5 %/h numa sessão de
+2026-07-28, mas o número não vale: havia depuração por Wi-Fi e streaming contínuo
+de logcat, que consomem sozinhos. Uma medida honesta precisa de uma hora **sem
+adb conectado**, comparando início e fim pelo `dumpsys battery`.
+
+Feito até agora, em ordem de retorno por risco:
+
+- [x] ~~Remover a chamada do tracker de EDA~~ — `EDA_CONTINUOUS` não existe neste
+      hardware, então era só um aviso no log. A matemática fica dormente em
+      `EdaFeatures.kt`, coberta por testes, para um relógio que suporte.
+- [x] ~~Reduzir a cadência do SpO2~~ — de 60 s para 5 min. Cada medição acende os
+      LEDs por ~30 s; a 60 s o sensor óptico ficava ligado ~50 % do tempo por um
+      valor que mudou entre amostras consecutivas em 8 % dos casos, quase sempre
+      de um ponto. Cai para ~10 % do ciclo de trabalho anterior.
+- [ ] **Ciclar a temperatura de pele** em vez de contínua. Dois ganhos num
+      experimento só: corta um sensor contínuo e testa se é ela que causa o buraco
+      de ~11 s por minuto (§4.3).
+- [ ] **Soltar o `PARTIAL_WAKE_LOCK`** e verificar se a coleta sobrevive só com o
+      foreground service. Maior retorno e maior risco — pode ser exatamente o que
+      mantém o stream vivo com a tela apagada. Medir antes e depois.
+- [ ] **Baixar a taxa do acelerômetro** ou amostrá-lo por janelas: ele roda
+      contínuo para produzir um booleano por segundo.
+- [ ] Decidir cadência de envio (1/s é caro em Bluetooth; considerar lote a cada 5–10 s — agora com 9 campos por payload em vez de 6).
+- [ ] Iniciar processo de parceria Samsung antes de qualquer distribuição (vale para EDA e acelerômetro também).

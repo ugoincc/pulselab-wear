@@ -28,16 +28,15 @@ private const val SPO2_STATUS_COMPLETED = 2  // confirmed: on-demand measurement
 private const val SKIN_TEMP_STATUS_VALID = 0 // confirmed: 0 == valid (NOT 1)
 
 /**
- * PROVISIONAL: EDA has never been read on-device, so its "valid" status code is
- * assumed to follow the skin-temperature convention (0 == valid). Every EDA sample
- * is logged with its raw status so the first on-device run can confirm or correct
- * this — the same validation that turned up skin temperature's 0 (not 1).
+ * How often the on-demand SpO2 tracker is re-armed.
+ *
+ * Each arm is one ~30 s measurement with the optical LEDs lit, so re-arming every
+ * minute kept the sensor burning roughly half the time for a number that barely
+ * moves at rest (SpO2 changed between consecutive samples in 8 % of them, and
+ * mostly by one point). Five minutes is still far denser than the physiology
+ * warrants and costs about a tenth of the duty cycle.
  */
-private const val EDA_STATUS_VALID = 0
-
-// SpO2 is on-demand (one ~30 s measurement per arm), so re-arm periodically to
-// keep the value fresh.
-private const val SPO2_REARM_INTERVAL_MS = 60_000L
+private const val SPO2_REARM_INTERVAL_MS = 5 * 60_000L
 
 /**
  * The watch's single source of biometrics, backed by the Samsung Health Sensor
@@ -57,8 +56,12 @@ private const val SPO2_REARM_INTERVAL_MS = 60_000L
  * exclude movement-contaminated windows from the composite index.
  *
  * Cadence model: HEART_RATE_CONTINUOUS (~1 Hz) is the driver. The slower or
- * higher-rate channels (SpO2, skin temperature, EDA, accelerometer) update shared
+ * higher-rate channels (SpO2, skin temperature, accelerometer) update shared
  * "latest" state that rides along on the next HR emission.
+ *
+ * EDA is not among them: EDA_CONTINUOUS is absent from this hardware's capability
+ * list, so the tracker was never anything but a warning in the log. The feature
+ * maths stays in [EdaWindow], dormant, for a watch that supports it.
  */
 class SamsungSensorMonitor(context: Context) {
 
@@ -74,7 +77,6 @@ class SamsungSensorMonitor(context: Context) {
         callbackFlow {
             val connection = SensorConnectionManager(appContext)
             val ibiWindow = IbiWindow(windowMs)
-            val edaWindow = EdaWindow()
             val motionGate = MotionGate()
 
             // Secondary metrics updated by their own trackers; attached to the
@@ -85,7 +87,6 @@ class SamsungSensorMonitor(context: Context) {
             var hrTracker: HealthTracker? = null
             var spo2Tracker: HealthTracker? = null
             var skinTempTracker: HealthTracker? = null
-            var edaTracker: HealthTracker? = null
             var accelTracker: HealthTracker? = null
             var spo2Job: Job? = null
 
@@ -167,8 +168,11 @@ class SamsungSensorMonitor(context: Context) {
                                 spo2 = latestSpo2,
                                 skinTemp = latestSkinTemp,
                                 baevskySI = si,
-                                edaTonic = edaWindow.tonicLevel(),
-                                edaScrPerMin = edaWindow.scrPerMinute(),
+                                // Always null on this hardware — kept in the payload
+                                // so the phone contract does not change if a watch
+                                // with EDA shows up. See [EdaWindow].
+                                edaTonic = null,
+                                edaScrPerMin = null,
                                 motionFlag = moving,
                                 timestamp = dp.getTimestamp()
                             )
@@ -218,25 +222,6 @@ class SamsungSensorMonitor(context: Context) {
                 }
             }
 
-            val edaListener = object : HealthTracker.TrackerEventListener {
-                override fun onDataReceived(dataPoints: List<DataPoint>) {
-                    for (dp in dataPoints) {
-                        val status = dp.getValue(ValueKey.EdaSet.STATUS)
-                        val conductance = dp.getValue(ValueKey.EdaSet.SKIN_CONDUCTANCE)
-                        // Logged unconditionally: EDA_STATUS_VALID is still a guess.
-                        Log.d(TAG, "EDA status=$status skinConductance=$conductance")
-                        if (status == EDA_STATUS_VALID && conductance != null && conductance > 0f) {
-                            edaWindow.add(conductance.toDouble(), dp.getTimestamp())
-                        }
-                    }
-                }
-
-                override fun onFlushCompleted() {}
-                override fun onError(error: HealthTracker.TrackerError) {
-                    Log.e(TAG, "EDA tracker error: $error")
-                }
-            }
-
             val accelListener = object : HealthTracker.TrackerEventListener {
                 override fun onDataReceived(dataPoints: List<DataPoint>) {
                     for (dp in dataPoints) {
@@ -279,7 +264,6 @@ class SamsungSensorMonitor(context: Context) {
 
                 hrTracker = startContinuous(HealthTrackerType.HEART_RATE_CONTINUOUS, hrListener)
                 skinTempTracker = startContinuous(HealthTrackerType.SKIN_TEMPERATURE_CONTINUOUS, skinTempListener)
-                edaTracker = startContinuous(HealthTrackerType.EDA_CONTINUOUS, edaListener)
                 accelTracker = startContinuous(HealthTrackerType.ACCELEROMETER_CONTINUOUS, accelListener)
 
                 // SpO2 is on-demand: each arm yields one ~30 s measurement, so
@@ -314,7 +298,6 @@ class SamsungSensorMonitor(context: Context) {
                 hrTracker?.unsetEventListener()
                 spo2Tracker?.unsetEventListener()
                 skinTempTracker?.unsetEventListener()
-                edaTracker?.unsetEventListener()
                 accelTracker?.unsetEventListener()
                 connection.disconnect()
                 Log.d(TAG, "Monitor closed — trackers unset, service disconnected")
