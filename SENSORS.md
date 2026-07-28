@@ -216,31 +216,60 @@ No celular, `WearBridgeModule.emitBatch()` desempacota o lote em eventos
 com os dois apps rodando: o card "Biometria do relógio" mostrou BPM 79, HRV 45,
 SI 119, SpO2 94, Temp 35,0 °C com o indicador "Ao vivo".
 
-### 4.3 A série NÃO está completa com a tela apagada — corrige a §4.1
+### 4.3 A série tem buracos periódicos de ~11 s por minuto — e não é a tela
 
-A conclusão anterior ("a série temporal fica completa, a 1 Hz; nada se perde")
-**estava errada**, e o erro merece registro porque é do tipo que passa fácil.
+A série entregue **não** é 1 Hz contínuo. Mas a causa não é nenhuma das duas que
+se suspeitou primeiro (nem a tela dormente, nem o transporte), e vale registrar o
+caminho todo porque cada etapa errada tinha uma aparência convincente.
 
-O que se mediu em 2026-07-27 foi que, *dentro* de uma rajada, o `lagMs` decresce
-em passos de exatamente 1000 ms. Isso prova que os timestamps são instantes reais
-de aquisição — e continua valendo. Mas não prova o que se concluiu a partir dele:
-que as rajadas, somadas, cobrem todo o tempo decorrido. São duas afirmações
-diferentes, e só a primeira foi testada.
+**O instrumento de medida errado.** As primeiras contagens saíram de
+`adb logcat -d` depois de esperar N minutos. O buffer `main` do relógio tem 1 MiB
+e vive saturado pelo próprio sistema: um dump de 8 minutos devolveu só o último
+minuto. Toda taxa calculada assim ("52 callbacks em 360 s", "0,14 Hz") media
+rotação de buffer, não fisiologia. **Para contar amostras, ou se transmite o
+logcat para arquivo (`adb logcat ... > arquivo`, sem `-d`), ou se conta no NDJSON
+do celular** — que é o registro real e o que interessa para a pesquisa.
 
-A medição controlada de 2026-07-28 (6 min corridos, relógio vestido, uso misto)
-registrou **52 callbacks em 360 s** — cerca de 0,14 Hz, não 1 Hz. Com a tela
-acesa a cadência é de exatamente 1 amostra por segundo; com ela apagada, a maior
-rajada da janela trouxe 20 amostras cobrindo ~19 s de atraso. As rajadas **não**
-recompõem os intervalos dormentes: o que falta, falta mesmo.
+**O que os dados de verdade dizem** (NDJSON de 2026-07-28, 1530 amostras,
+09:58→10:41, e um streaming contínuo de 444 s):
 
-Consequência para a pesquisa: as séries têm **lacunas durante o repouso da tela**,
-e qualquer estatística por janela precisa contar amostras em vez de assumir
-`n = duração × 1 Hz`. Não invalida os dados — os que existem são verdadeiros e
-bem carimbados —, mas invalida a premissa de amostragem uniforme.
+| Medida | Valor |
+|---|---|
+| Callbacks do SDK | 446 em 444 s — **1,00 Hz, sem falhar** |
+| Destes, com `HR_STATUS_VALID` | 373 (84 %) |
+| Os outros 73 | `HR=0 status=0`, lista de IBI vazia |
+| Intervalos de 1 s exato entre amostras entregues | 1471 de 1523 |
+| Buracos de 5–30 s | 40, mediana **11,0 s**, espaçados por mediana de **60 s** |
+| Cobertura na janela limpa da baseline | 244/300 = 81 % |
 
-Ainda **não está estabelecido** se o sensor deixa de amostrar ou se amostra e a
-plataforma descarta. A distinção muda a solução (nada a fazer do nosso lado vs.
-bufferizar no relógio) e é a próxima coisa a investigar.
+O sensor **nunca para de amostrar** e o `lagMs` fica em −215 ms o tempo todo
+durante os buracos: não há atraso, não há rajada, não há nada preso no
+transporte. O que acontece é que, por ~11 s a cada minuto, o tracker de FC
+responde `status=0` com IBI vazio — está medindo e não produz resultado válido. E
+o nosso código, corretamente, só emite `SensorReading` quando o status é válido.
+O buraco é do sensor, não nosso.
+
+**Suspeito principal: o tracker de temperatura de pele.** Atravessando um buraco,
+a temperatura mudou de valor em **32 %** dos casos, contra uma taxa base de
+**1,4 %** entre amostras consecutivas de 1 s — enriquecimento de ~23×. O SpO2
+também aparece (20 % contra 8,1 % de base), bem mais fraco. A leitura mais
+provável é que a medição de temperatura preempta o PPG: os sensores compartilham
+o mesmo caminho óptico/térmico e o SDK serializa.
+
+Isto é correlação, não prova. **O teste que decide** é desligar o tracker de
+temperatura e medir de novo: se o buraco periódico sumir, está resolvido, e a
+escolha passa a ser explícita — temperatura a 1/min ou HRV sem furos, não os dois.
+
+Consequência para a pesquisa, hoje: as séries perdem ~18 % de cada minuto de
+forma **regular e previsível**, não aleatória. Qualquer estatística por janela
+precisa contar amostras em vez de assumir `n = duração × 1 Hz` (a baseline de
+5 min juntou 244 amostras, não 300). Os dados que existem são verdadeiros e bem
+carimbados; o que cai é a premissa de amostragem uniforme.
+
+Sobre a §4.1: a conclusão de 2026-07-27 de que os timestamps são instantes reais
+de aquisição **continua válida** e foi confirmada. O que ela não sustentava era a
+frase seguinte, "nada se perde com a tela apagada" — perde-se, só que por um
+motivo que não tem a ver com a tela.
 
 ### 4.4 Requisitos do Data Layer
 
@@ -280,8 +309,15 @@ bufferizar no relógio) e é a próxima coisa a investigar.
       reinício automático numa das rodadas. Não se repetiu; vigiar em sessão longa.
 - [x] ~~Enviar em lote ao celular~~ — uma mensagem por rajada, validada ponta a
       ponta em 2026-07-28 (§4.2). Maior lote observado: 55 amostras em 7548 B.
-- [ ] **Lacunas na série com a tela apagada** (§4.3): estabelecer se o sensor
-      para de amostrar ou se a plataforma descarta. Muda a solução.
+- [x] ~~Lacunas na série~~ — não é a tela nem o transporte: o tracker de FC
+      responde `status=0` por ~11 s a cada minuto (§4.3).
+- [ ] **Confirmar que o tracker de temperatura causa o buraco periódico**:
+      desligá-lo e remedir. Se sumir, decidir explicitamente entre temperatura e
+      HRV sem furos — hoje se está pagando ~18 % da série por uma medida que muda
+      de valor uma vez por minuto.
+- [ ] **Baseline capturada em 2026-07-28** (RMSSD 50,6 ± 8,5; SI 74,1 ± 13,4;
+      n = 231): é de uma sessão só e de um participante. Repetir em dias
+      diferentes antes de tratar como referência estável.
 
 ### Operacional
 
