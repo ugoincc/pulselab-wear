@@ -267,8 +267,9 @@ bufferizar no relógio) e é a próxima coisa a investigar.
       mostrava `over 40 IBIs (38 descartados)`, mas `descartados` é acumulado
       desde o início da sessão e `40` é a janela deslizante de 60 s: dividir um
       pelo outro não é uma taxa de nada. O log agora imprime
-      `descarte X% acumulado: r/(a+r)`, comparando iguais com iguais. Reavaliar a
-      taxa real — só então decidir se o limiar de Malik precisa mexer.
+      `descarte X% acumulado: r/(a+r)`, comparando iguais com iguais. Taxa real
+      medida em 2026-07-28, relógio vestido e parado: **12 % (15/123)** — normal
+      para PPG de pulso. O limiar de Malik fica como está.
 - [ ] `SensorStreamService` registrou um `JobCancellationException` seguido de
       reinício automático numa das rodadas. Não se repetiu; vigiar em sessão longa.
 - [x] ~~Enviar em lote ao celular~~ — uma mensagem por rajada, validada ponta a
