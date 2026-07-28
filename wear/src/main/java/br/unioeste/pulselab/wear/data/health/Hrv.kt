@@ -72,9 +72,24 @@ class IbiWindow(private val windowMs: Long = DEFAULT_WINDOW_MS) {
     private var lastAccepted: Double? = null
     private var consecutiveRejections = 0
 
-    /** How many intervals the filters have thrown away, for on-device diagnosis. */
+    /**
+     * Filter counters since the session began, for on-device diagnosis.
+     *
+     * Both are cumulative, unlike [size], which is a 60 s sliding window. Reading
+     * [rejected] against [size] is the mistake to avoid — "40 IBIs (38 rejected)"
+     * looks like a 49 % rejection rate and is nothing of the sort; it is 38
+     * rejections since launch against whatever happens to be in the last minute.
+     * Use [rejectionRate], which compares like with like.
+     */
     var rejected: Int = 0
         private set
+
+    var accepted: Int = 0
+        private set
+
+    /** Share of offered intervals the filters threw away, or null before any. */
+    val rejectionRate: Double?
+        get() = (accepted + rejected).takeIf { it > 0 }?.let { rejected.toDouble() / it }
 
     /**
      * Offers one IBI (ms) observed at [atMs] (epoch ms) to the window, returning
@@ -115,6 +130,7 @@ class IbiWindow(private val windowMs: Long = DEFAULT_WINDOW_MS) {
 
         consecutiveRejections = 0
         lastAccepted = ibiMs
+        accepted++
         samples.addLast(Sample(atMs, ibiMs))
         val cutoff = atMs - windowMs
         while (samples.isNotEmpty() && samples.first().atMs < cutoff) {
@@ -143,6 +159,7 @@ class IbiWindow(private val windowMs: Long = DEFAULT_WINDOW_MS) {
         lastAccepted = null
         consecutiveRejections = 0
         rejected = 0
+        accepted = 0
     }
 
     companion object {

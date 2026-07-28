@@ -151,7 +151,8 @@ class SamsungSensorMonitor(context: Context) {
                                 TAG,
                                 "HR=$hr RMSSD=${rmssd?.let { "%.1f".format(it) } ?: "—"} " +
                                     "SI=${si?.let { "%.1f".format(it) } ?: "—"} over ${ibiWindow.size} IBIs " +
-                                    "(${ibiWindow.rejected} descartados), " +
+                                    "(descarte ${ibiWindow.rejectionRate?.let { "%.0f%%".format(it * 100) } ?: "—"} " +
+                                    "acumulado: ${ibiWindow.rejected}/${ibiWindow.accepted + ibiWindow.rejected}), " +
                                     "motion=$moving p2p=${motionGate.peakToPeak()?.let { "%.0f".format(it) } ?: "—"}"
                             )
 

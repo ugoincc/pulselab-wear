@@ -189,15 +189,67 @@ amostra com o instante verdadeiro; só a *entrega* é adiada.
 
 Consequências práticas:
 
-- **Para a pesquisa: nenhuma.** A série temporal fica completa, a 1 Hz, com
-  timestamps corretos. Nada se perde com a tela apagada.
-- **Para o tempo real: sim.** O índice no celular pode ficar até ~45 s
-  desatualizado enquanto a tela está apagada. É limite de plataforma, não bug —
-  qualquer expectativa de "ao vivo" durante o uso normal precisa acomodar isso.
-- **Para o transporte: é preciso corrigir.** Uma mensagem Data Layer por amostra
-  vira uma rajada de ~66 mensagens em menos de 1 s. Ver pendências.
+- **Para o tempo real: sim.** O índice no celular pode ficar desatualizado
+  enquanto a tela está apagada — o maior atraso já medido é de **61,8 s**
+  (2026-07-28). É limite de plataforma, não bug.
+- **Para o transporte: corrigido em 2026-07-28.** Uma mensagem Data Layer por
+  amostra virava uma rajada de ~66 mensagens em menos de 1 s. Agora sai uma
+  mensagem por rajada — ver §4.2.
+
+### 4.2 Envio em lote — validado ponta a ponta (2026-07-28)
+
+`SamsungSensorMonitor.readingFlow()` emite `List<SensorReading>` por callback do
+SDK, e o callback **é** a fronteira da rajada: preservá-la é deixar a plataforma
+ditar a cadência em vez de inventar um intervalo por cima de um atraso que não
+controlamos. Uma mensagem `/sensor/batch` por rajada, com `{"samples":[...]}`.
+
+Medido no relógio vestido, com o celular pareado:
+
+| Situação | Mensagens | Maior lote | Maior `lagMs` |
+|---|---|---|---|
+| Tela acesa | 1/s | 1 amostra (147 B) | −0,2 s |
+| Uso misto, 5 min | 7 | 55 amostras (7548 B) | 61,8 s |
+| Uso misto, 6 min | 23 | 20 amostras | 18,8 s |
+
+No celular, `WearBridgeModule.emitBatch()` desempacota o lote em eventos
+`onHeartRate` individuais, então nada em TypeScript precisou mudar. Confirmado
+com os dois apps rodando: o card "Biometria do relógio" mostrou BPM 79, HRV 45,
+SI 119, SpO2 94, Temp 35,0 °C com o indicador "Ao vivo".
+
+### 4.3 A série NÃO está completa com a tela apagada — corrige a §4.1
+
+A conclusão anterior ("a série temporal fica completa, a 1 Hz; nada se perde")
+**estava errada**, e o erro merece registro porque é do tipo que passa fácil.
+
+O que se mediu em 2026-07-27 foi que, *dentro* de uma rajada, o `lagMs` decresce
+em passos de exatamente 1000 ms. Isso prova que os timestamps são instantes reais
+de aquisição — e continua valendo. Mas não prova o que se concluiu a partir dele:
+que as rajadas, somadas, cobrem todo o tempo decorrido. São duas afirmações
+diferentes, e só a primeira foi testada.
+
+A medição controlada de 2026-07-28 (6 min corridos, relógio vestido, uso misto)
+registrou **52 callbacks em 360 s** — cerca de 0,14 Hz, não 1 Hz. Com a tela
+acesa a cadência é de exatamente 1 amostra por segundo; com ela apagada, a maior
+rajada da janela trouxe 20 amostras cobrindo ~19 s de atraso. As rajadas **não**
+recompõem os intervalos dormentes: o que falta, falta mesmo.
+
+Consequência para a pesquisa: as séries têm **lacunas durante o repouso da tela**,
+e qualquer estatística por janela precisa contar amostras em vez de assumir
+`n = duração × 1 Hz`. Não invalida os dados — os que existem são verdadeiros e
+bem carimbados —, mas invalida a premissa de amostragem uniforme.
+
+Ainda **não está estabelecido** se o sensor deixa de amostrar ou se amostra e a
+plataforma descarta. A distinção muda a solução (nada a fazer do nosso lado vs.
+bufferizar no relógio) e é a próxima coisa a investigar.
+
+### 4.4 Requisitos do Data Layer
+
 - Package name e assinatura **precisam ser idênticos** nos dois apps (`br.unioeste.pulselab` + debug.keystore do RN) — requisito do Data Layer.
 - O receptor no celular precisa do `<data android:scheme="wear" .../>` no intent-filter, senão o GMS descarta a mensagem silenciosamente.
+- O `pathPrefix="/sensor"` do intent-filter já cobre `/sensor/batch`; o path novo
+  (em vez de mudar o formato em `/sensor/data`) faz um app desatualizado deixar de
+  receber, em vez de ler um array como se fosse uma amostra. Falhar em silêncio é
+  melhor que falhar errado.
 
 ## 5. Pendências conhecidas
 
@@ -211,16 +263,18 @@ Consequências práticas:
 - [ ] **Recalibrar `MotionGate.DEFAULT_THRESHOLD`** com o relógio *vestido*. A
       medição de 2026-07-27 saiu bimodal (p50 = 0 parado, ~400 manipulado) com o
       relógio apoiado numa mesa; um pulso real tem piso diferente de zero.
-- [ ] Investigar a taxa de rejeição de IBI (~40% na primeira sessão). Pode ser
-      qualidade normal de PPG de pulso ou ajuste da pulseira — comparar entre
-      sessões antes de mexer no limiar de Malik.
+- [x] ~~Taxa de rejeição de IBI de ~40%~~ — **o número não existia**. O log
+      mostrava `over 40 IBIs (38 descartados)`, mas `descartados` é acumulado
+      desde o início da sessão e `40` é a janela deslizante de 60 s: dividir um
+      pelo outro não é uma taxa de nada. O log agora imprime
+      `descarte X% acumulado: r/(a+r)`, comparando iguais com iguais. Reavaliar a
+      taxa real — só então decidir se o limiar de Malik precisa mexer.
 - [ ] `SensorStreamService` registrou um `JobCancellationException` seguido de
       reinício automático numa das rodadas. Não se repetiu; vigiar em sessão longa.
-- [ ] **Enviar em lote ao celular.** Deixou de ser otimização e virou correção —
-      ver §4.1: a plataforma já entrega em rajadas de até 66 amostras, e o
-      `WearDataSender` dispara uma mensagem Data Layer por amostra, ou seja ~66
-      mensagens em menos de 1 s. Trocar por uma mensagem com array de amostras
-      (muda o contrato nos dois repositórios).
+- [x] ~~Enviar em lote ao celular~~ — uma mensagem por rajada, validada ponta a
+      ponta em 2026-07-28 (§4.2). Maior lote observado: 55 amostras em 7548 B.
+- [ ] **Lacunas na série com a tela apagada** (§4.3): estabelecer se o sensor
+      para de amostrar ou se a plataforma descarta. Muda a solução.
 
 ### Operacional
 
@@ -235,6 +289,12 @@ Consequências práticas:
 
 ### Lado do celular (Parte 2 — repo `pulselab-companion`)
 
-- [ ] Estender `HeartRateEvent` no `WearBridge.ts` com os campos novos — **não** criar um segundo evento/listener.
-- [ ] UI de captura de baseline (5–10 min de repouso) + cálculo do índice composto.
-- [ ] Escolher storage local (o app hoje não tem SQLite nem WatermelonDB — é dependência nova em repo de terceiro, decidir com o dono antes).
+- [x] ~~Estender `HeartRateEvent`~~ — campos novos no evento existente, sem segundo listener.
+- [x] ~~UI de captura de baseline + índice composto~~ — modal de 5 min, z-score com
+      renormalização de peso sobre as features disponíveis.
+- [x] ~~Storage local~~ — NDJSON append-only via `expo-file-system`, já presente no
+      projeto. Nenhuma dependência nova no repo do colega.
+- [ ] **Rodar a captura de baseline de verdade.** O fluxo está instalado e
+      recebendo dados ao vivo, mas os 5 min de repouso nunca foram gravados — sem
+      isso o índice composto não tem referência e os cortes de faixa (±0,5)
+      seguem provisórios.
