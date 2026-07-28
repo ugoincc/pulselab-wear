@@ -263,6 +263,12 @@ bufferizar no relógio) e é a próxima coisa a investigar.
 - [ ] **Recalibrar `MotionGate.DEFAULT_THRESHOLD`** com o relógio *vestido*. A
       medição de 2026-07-27 saiu bimodal (p50 = 0 parado, ~400 manipulado) com o
       relógio apoiado numa mesa; um pulso real tem piso diferente de zero.
+      Primeira amostra no pulso (2026-07-28, braço parado, n = 39): p50 = 34,
+      p90 = 38, máx = 155 — o piso realmente não é zero, e o limiar de 200
+      classificou tudo como parado, como devia. Falta o outro lado da bimodal:
+      uma sessão com movimento deliberado (digitar, caminhar, gesticular) para
+      saber onde fica o vale entre as duas modas. Só então o 200 deixa de ser
+      chute.
 - [x] ~~Taxa de rejeição de IBI de ~40%~~ — **o número não existia**. O log
       mostrava `over 40 IBIs (38 descartados)`, mas `descartados` é acumulado
       desde o início da sessão e `40` é a janela deslizante de 60 s: dividir um
