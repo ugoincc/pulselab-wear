@@ -1,0 +1,148 @@
+=== Execução 1: tela acesa, próximo, 1x (execução preliminar original) ===
+(dados desta execução ficam em tools/sample-run/, não repetidos aqui)
+
+=== Execução 2: tela apagada, próximo, 1x, ~29 min ===
+==================================================================
+CONCILIAÇÃO DA EXECUÇÃO
+==================================================================
+emitidas (S):  1740
+recebidas (R): 1740
+entregues:     1740
+
+Taxa de perda: 0.00%  (0 amostras)
+
+Reordenamento: 0 ocorrência(s)
+
+Latência fim a fim (NÃO CORRIGIDA — contém deriva de relógio):
+  n=1740 min=33ms mediana=77.0ms max=3839ms
+
+Variação da latência (diferenças sucessivas, RFC 3393):
+  n=1739 min=-1030ms mediana=-1.0ms max=3775ms
+
+Travessia nativo→JS (imune a deriva: mesmo relógio nas duas pontas):
+  n=1740 min=4ms mediana=7.0ms max=73ms
+
+Divergência de conteúdo: 0 amostra(s)
+==================================================================
+
+=== Execução 3: tela apagada, próximo, 2x, ~90s ===
+==================================================================
+CONCILIAÇÃO DA EXECUÇÃO
+==================================================================
+emitidas (S):  287
+recebidas (R): 176
+entregues:     176
+
+Taxa de perda: 38.68%  (111 amostras)
+  sequências perdidas: [176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195] ...
+
+Reordenamento: 0 ocorrência(s)
+
+Latência fim a fim (NÃO CORRIGIDA — contém deriva de relógio):
+  n=176 min=30ms mediana=45.0ms max=461ms
+
+Variação da latência (diferenças sucessivas, RFC 3393):
+  n=175 min=-387ms mediana=0.0ms max=416ms
+
+Travessia nativo→JS (imune a deriva: mesmo relógio nas duas pontas):
+  n=176 min=4ms mediana=7.0ms max=19ms
+
+Divergência de conteúdo: 0 amostra(s)
+==================================================================
+
+=== Execução 4: tela acesa, próximo, 2x ===
+==================================================================
+CONCILIAÇÃO DA EXECUÇÃO
+==================================================================
+emitidas (S):  116
+recebidas (R): 116
+entregues:     116
+
+Taxa de perda: 0.00%  (0 amostras)
+
+Reordenamento: 0 ocorrência(s)
+
+Latência fim a fim (NÃO CORRIGIDA — contém deriva de relógio):
+  n=116 min=35ms mediana=53.0ms max=467ms
+
+Variação da latência (diferenças sucessivas, RFC 3393):
+  n=115 min=-366ms mediana=1.0ms max=418ms
+
+Travessia nativo→JS (imune a deriva: mesmo relógio nas duas pontas):
+  n=116 min=5ms mediana=8.0ms max=39ms
+
+Divergência de conteúdo: 0 amostra(s)
+==================================================================
+
+=== Execução 5: tela acesa, próximo, 4x ===
+==================================================================
+CONCILIAÇÃO DA EXECUÇÃO
+==================================================================
+emitidas (S):  232
+recebidas (R): 232
+entregues:     232
+
+Taxa de perda: 0.00%  (0 amostras)
+
+Reordenamento: 0 ocorrência(s)
+
+Latência fim a fim (NÃO CORRIGIDA — contém deriva de relógio):
+  n=232 min=26ms mediana=45.0ms max=420ms
+
+Variação da latência (diferenças sucessivas, RFC 3393):
+  n=231 min=-273ms mediana=1.0ms max=377ms
+
+Travessia nativo→JS (imune a deriva: mesmo relógio nas duas pontas):
+  n=232 min=4ms mediana=7.0ms max=85ms
+
+Divergência de conteúdo: 0 amostra(s)
+==================================================================
+
+=== Execução 6: interrupção de Bluetooth ~20s, tela acesa, 1x ===
+==================================================================
+CONCILIAÇÃO DA EXECUÇÃO
+==================================================================
+emitidas (S):  110
+recebidas (R): 105
+entregues:     105
+
+Taxa de perda: 4.55%  (5 amostras)
+  sequências perdidas: [24, 25, 26, 27, 28]
+
+Reordenamento: 0 ocorrência(s)
+
+Latência fim a fim (NÃO CORRIGIDA — contém deriva de relógio):
+  n=105 min=37ms mediana=408.0ms max=2365ms
+
+Variação da latência (diferenças sucessivas, RFC 3393):
+  n=104 min=-1036ms mediana=-8.5ms max=1302ms
+
+Travessia nativo→JS (imune a deriva: mesmo relógio nas duas pontas):
+  n=105 min=3ms mediana=6.0ms max=371ms
+
+Divergência de conteúdo: 0 amostra(s)
+==================================================================
+
+=== Execução 7: tela apagada, 2 cômodos de distância, 1x ===
+==================================================================
+CONCILIAÇÃO DA EXECUÇÃO
+==================================================================
+emitidas (S):  78
+recebidas (R): 78
+entregues:     78
+
+Taxa de perda: 0.00%  (0 amostras)
+
+Reordenamento: 0 ocorrência(s)
+
+Latência fim a fim (NÃO CORRIGIDA — contém deriva de relógio):
+  n=78 min=36ms mediana=104.0ms max=845ms
+
+Variação da latência (diferenças sucessivas, RFC 3393):
+  n=77 min=-740ms mediana=-6.0ms max=485ms
+
+Travessia nativo→JS (imune a deriva: mesmo relógio nas duas pontas):
+  n=78 min=4ms mediana=6.0ms max=8ms
+
+Divergência de conteúdo: 0 amostra(s)
+==================================================================
