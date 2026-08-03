@@ -4,6 +4,12 @@
 > implementar contra ele — não o contrário. Qualquer mudança de campo passa
 > primeiro por aqui, com bump de versão, antes de tocar `SensorReading.kt`,
 > `SensorBundle.kt` ou `WearBridge.ts`.
+>
+> **Cópia única.** Este arquivo, neste repositório, é a fonte. O repo da
+> monografia (`tcc_tex/context/`) mantém apenas um ponteiro para cá — havia
+> duas cópias completas e elas divergiram em 24 linhas (a §5 daqui ficou
+> presa na versão antiga, que ancorava o reset do `sequenceNumber` em
+> reconexão do Data Layer). Não recriar a segunda cópia.
 
 ## 1. Escopo e não-escopo
 
@@ -44,7 +50,7 @@ mais os campos novos listados na Seção 4.
 | Campo | Tipo (wire) | Obrigatório | Motivo |
 |---|---|---|---|
 | `schemaVersion` | `Int` | sim | Versionamento do contrato (Seção 2). |
-| `sequenceNumber` | `Long` | sim | Monotônico, incrementado por `SensorReading` emitida (não por lote/mensagem — um número por elemento de `samples`). Permite detectar perda mesmo dentro de uma rajada. Reinicia em `0` a cada (re)conexão do `MessageClient`/`NodeClient` — ver Seção 5. |
+| `sequenceNumber` | `Long` | sim | Monotônico, incrementado por `SensorReading` emitida (não por lote/mensagem — um número por elemento de `samples`). Permite detectar perda mesmo dentro de uma rajada. Reinicia em `0` a cada nova coleta de `readingFlow()` do provedor — **não** em reconexão de transporte; ver Seção 5. |
 | `phoneReceivedAt` | `Long` | sim | Epoch ms, carimbado no celular no momento em que `WearableHeartRateListenerService.onMessageReceived` processa a mensagem — **não** no momento em que chega à camada JS (essa segunda travessia, nativo→JS, é interna ao celular e não faz parte do que este protocolo mede; ver Seção 7 sobre isso). |
 | `spo2MeasuredAt` | `Long?` | não (nulo se `spo2` nulo) | Epoch ms de quando aquele ciclo de SpO2 de fato completou, distinto de `timestamp`. Resolve a ficção do timestamp único identificada na auditoria de código. |
 | `skinTempMeasuredAt` | `Long?` | não (nulo se `skinTemp` nulo) | Idem, para skin temperature. |
@@ -57,10 +63,22 @@ histórico de decisão no `OBJETIVOS-E-DECISOES-tcc.md`).
 
 ## 5. Semântica de `sequenceNumber`
 
-- Escopo: por sessão de conexão Data Layer, não global/persistente.
-- Reinício: toda vez que `NodeClient`/`MessageClient` reconecta após queda,
-  reinicia em `0`. O celular deve tratar um `sequenceNumber` menor que o
-  último recebido como sinal de reconexão, não como amostra fora de ordem —
+- Escopo: por ciclo de conexão do **provedor**, não do transporte Data
+  Layer (`MessageClient`/`NodeClient` não têm identidade de conexão
+  persistente hoje — `WearDataSender` recria o client a cada envio, então
+  não servem de âncora para o reset).
+- Reinício: reinicia em `0` a cada nova coleta de `readingFlow()` do
+  provedor — para `SamsungSensorProvider`, isso é cada (re)conexão ao
+  Health Tracking Service via `SensorConnectionManager.connect()`. É o
+  ponto onde o estado interno do provedor reinicializa de fato em conjunto
+  (janela de IBI, gate de movimento, valores de carry-forward de
+  spo2/skinTemp) — por isso é o limite certo para o reset, não um conceito
+  de transporte. Cada provedor futuro (`HealthServicesProvider`,
+  `ReplayProvider`) define seu próprio equivalente — o que importa é que
+  o reset coincida com o momento em que o estado interno do provedor
+  reinicia, não com um evento de rede específico do Samsung SDK.
+- O celular deve tratar um `sequenceNumber` menor que o último recebido
+  como sinal de reconexão do provedor, não como amostra fora de ordem —
   não é erro, é um evento a ser logado.
 - Uso pretendido: no harness de avaliação (Objetivo 5), `sequenceNumber`
   ausente na sequência recebida = amostra perdida. `sequenceNumber` fora de
@@ -110,7 +128,7 @@ interface SensorProvider {
      * a granularidade que sua fonte de dado realmente entrega (não há
      * imposição de tamanho de lote fixo nesta interface).
      */
-    fun readingFlow(): Flow<List<SensorPayloadV1>>
+    fun readingFlow(): Flow<List<SensorBundle>>
 
     /** Libera recursos de conexão. Idempotente. */
     fun disconnect()
@@ -142,15 +160,20 @@ até a próxima (re)conexão.
   não suporta — Seção 3, `edaTonic`/`edaScrPerMin`).
 - `HealthServicesProvider`: adapta `LiveMeasureMonitor` (código recuperado
   do histórico, Seção "Achados de código" do `OBJETIVOS-E-DECISOES-tcc.md`)
-  ao formato `SensorPayloadV1`. `capabilities()` retorna só
+  ao formato `SensorBundle` (Seções 3 e 4). `capabilities()` retorna só
   `providesHrv=false` (Health Services `MeasureClient` não expõe IBI —
   logo não há como calcular RMSSD a partir dele), `providesBaevskySI=false`
   (mesma razão), `providesSpo2/providesSkinTemp/providesEda=false`, só
   `bpm` e `motionFlag` (se o acelerômetro for lido à parte) verdadeiros.
   Essa assimetria é, por si, a demonstração central do Objetivo 4.
-- `ReplayProvider`: a construir do zero (Seção 8) — não reaproveita o
+- `ReplayProvider`: construído do zero (Seção 8) — não reaproveita o
   `SIMULATED` antigo (ruído aleatório sem verdade fundamental conhecida,
   já descartado — ver decisão fixada).
+
+**Estado (branch `feature/instrumentacao-avaliacao`):** os três provedores
+existem e compilam; `SensorStreamService` coleta via `SensorProvider` e
+anuncia capacidades uma vez por conexão. Nada validado em dispositivo
+ainda.
 
 ## 7. Nota sobre a travessia nativo→JS (dentro do celular)
 
@@ -162,7 +185,7 @@ medir isso separadamente, um terceiro timestamp (`jsReceivedAt`, carimbado
 dentro do listener `WearBridge.ts`) pode ser adicionado como v1.1 sem
 quebrar compatibilidade, já que seria um campo novo opcional.
 
-## 8. Provedor de replay — requisitos (não implementado ainda)
+## 8. Provedor de replay — requisitos
 
 Não faz parte deste documento de schema, mas fica registrado aqui o
 requisito mínimo para não repetir o erro do `SIMULATED` antigo: o replay
@@ -171,3 +194,12 @@ com `sequenceNumber` e `timestamp` de origem conhecidos de antemão pelo
 avaliador, para que perda e deriva sejam mensuráveis por comparação exata
 contra o que foi de fato recebido — não por inspeção de plausibilidade do
 valor recebido.
+
+Implementado em `data/provider/`: `ReplaySeries` (passeio determinístico a
+partir de seed fixa), `ReplayProvider` (cadência e tamanho de lote
+parametrizáveis) e `EmissionLog`/`NdjsonEmissionLog`, que grava no relógio
+uma linha por amostra emitida — o conjunto `S` contra o qual o harness
+compara o que chegou. Campos de relógio de parede (`timestamp`,
+`spo2MeasuredAt`, `skinTempMeasuredAt`) ficam **fora** da série
+determinística, por não serem reproduzíveis entre execuções: vivem só no
+log de emissão.
