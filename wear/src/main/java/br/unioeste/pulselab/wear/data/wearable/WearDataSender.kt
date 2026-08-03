@@ -37,9 +37,10 @@ class WearDataSender {
 
     /**
      * Sends a [CapabilityAnnouncement] on [MessagePaths.SENSOR_CAPABILITIES] —
-     * meant to be called once per provider connection, not per sample
-     * (ESPECIFICACAO-protocolo-payload-v1.md §6.3). Not called from any
-     * production path yet — see the comment on [MessagePaths.SENSOR_CAPABILITIES].
+     * called once per provider connection, not per sample
+     * (ESPECIFICACAO-protocolo-payload-v1.md §6.3), by
+     * [br.unioeste.pulselab.wear.data.health.SensorStreamService] as it starts
+     * collecting.
      */
     suspend fun sendCapabilities(context: Context, announcement: CapabilityAnnouncement): Boolean {
         return try {

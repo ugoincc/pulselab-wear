@@ -17,11 +17,11 @@ object MessagePaths {
      * separate from [SENSOR_BATCH] so the phone doesn't have to unpack a
      * capability declaration out of every batch.
      *
-     * Not yet wired to any sender call in production code this iteration:
-     * [br.unioeste.pulselab.wear.data.wearable.WearDataSender.sendCapabilities] exists
-     * and can announce on this path, but nothing in [br.unioeste.pulselab.wear.data.health.SensorStreamService]
-     * invokes it yet — that lands when the service switches from calling
-     * `SamsungSensorMonitor` directly to going through `SensorProvider`.
+     * Sent by [br.unioeste.pulselab.wear.data.health.SensorStreamService] when it starts
+     * collecting a provider's flow, and re-attempted on the first batch that
+     * lands if the phone was unreachable at that moment — a run whose
+     * announcement was dropped would leave the phone unable to tell "null
+     * because not yet" from "null because never".
      */
     const val SENSOR_CAPABILITIES = "/sensor/capabilities"
 }

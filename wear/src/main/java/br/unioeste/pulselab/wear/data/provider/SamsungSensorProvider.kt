@@ -11,11 +11,11 @@ import kotlinx.coroutines.flow.map
  * [SensorProvider] wrapping [SamsungSensorMonitor] as-is (ESPECIFICACAO-protocolo-payload-v1.md
  * §6.4) — no changes to `SamsungSensorMonitor` or `SensorConnectionManager`.
  *
- * Not wired into [br.unioeste.pulselab.wear.data.health.SensorStreamService] this
- * iteration — that service still calls `SamsungSensorMonitor` directly. This
- * class exists so the `SensorProvider` contract has one working
- * implementation to validate against, ahead of the service switching over
- * once a second provider exists.
+ * The default source: [br.unioeste.pulselab.wear.data.health.SensorStreamService]
+ * collects through this when [br.unioeste.pulselab.wear.data.provider.ProviderChoice.SAMSUNG]
+ * is selected. Its capability set is the maximal one of the three providers,
+ * which is what makes the asymmetry against [HealthServicesProvider] visible
+ * to the phone without either side special-casing the other.
  */
 class SamsungSensorProvider(context: Context) : SensorProvider {
 

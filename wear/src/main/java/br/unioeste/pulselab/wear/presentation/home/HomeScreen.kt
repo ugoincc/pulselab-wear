@@ -37,7 +37,7 @@ import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
 import br.unioeste.pulselab.wear.model.HealthMetric
-import br.unioeste.pulselab.wear.model.SensorReading
+import br.unioeste.pulselab.wear.model.SensorBundle
 import br.unioeste.pulselab.wear.presentation.theme.PulseLabColors
 
 // HomeScreen is split into two layers:
@@ -155,8 +155,8 @@ private fun BodySensorsRationaleScreen(
 }
 
 /** Formats a metric for its orb, or null when that sensor has no value yet. */
-private fun SensorReading?.orbValue(metric: HealthMetric): String? = when (metric) {
-    HealthMetric.HEART_RATE -> this?.bpm?.let { "%.0f".format(it) }
+private fun SensorBundle?.orbValue(metric: HealthMetric): String? = when (metric) {
+    HealthMetric.HEART_RATE -> this?.bpm?.toString()
     HealthMetric.HRV -> this?.hrv?.toString()
     HealthMetric.STRESS_INDEX -> this?.baevskySI?.let { "%.0f".format(it) }
     HealthMetric.SPO2 -> this?.spo2?.toString()
@@ -276,8 +276,8 @@ fun HomeScreenContent(
 fun PreviewMonitoring() {
     HomeScreenContent(
         uiState = HomeUiState.Monitoring(
-            reading = SensorReading(
-                bpm = 72.0, hrv = 48, spo2 = 98, skinTemp = 32.4,
+            reading = SensorBundle(
+                bpm = 72, hrv = 48, spo2 = 98, skinTemp = 32.4,
                 baevskySI = 118.0, edaTonic = 4.82, edaScrPerMin = 3,
                 motionFlag = false, timestamp = 1_700_000_000_000L,
                 sequenceNumber = 0L,

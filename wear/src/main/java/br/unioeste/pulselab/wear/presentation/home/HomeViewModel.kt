@@ -6,7 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.google.android.gms.wearable.Wearable
 import br.unioeste.pulselab.wear.data.health.SensorStreamService
 import br.unioeste.pulselab.wear.data.health.SensorStreamStore
-import br.unioeste.pulselab.wear.model.SensorReading
+import br.unioeste.pulselab.wear.data.provider.ProviderChoice
+import br.unioeste.pulselab.wear.model.SensorBundle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +23,7 @@ sealed class HomeUiState {
      * has to render empty orbs rather than wait for data.
      */
     data class Monitoring(
-        val reading: SensorReading?,
+        val reading: SensorBundle?,
         val phoneReachable: Boolean? = null
     ) : HomeUiState()
 
@@ -30,10 +31,10 @@ sealed class HomeUiState {
 }
 
 /**
- * The watch is a relay: one source (Samsung Health Sensor SDK) streamed by
- * [SensorStreamService], which keeps collecting and forwarding to the phone
- * with the screen off. This ViewModel only mirrors the shared store into UI
- * state and starts/stops the service.
+ * The watch is a relay: one selected [br.unioeste.pulselab.wear.data.provider.SensorProvider]
+ * streamed by [SensorStreamService], which keeps collecting and forwarding to
+ * the phone with the screen off. This ViewModel only mirrors the shared store
+ * into UI state and starts/stops the service.
  */
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -53,10 +54,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (SensorStreamStore.isRunning.value) startSession()
     }
 
-    fun startSession() {
-        if (monitoringJob?.isActive == true) return
+    /**
+     * @param provider null keeps the persisted selection — the normal path.
+     *   An explicit choice is how an evaluation run points the service at a
+     *   different source without a rebuild.
+     */
+    fun startSession(provider: ProviderChoice? = null) {
+        if (monitoringJob?.isActive == true && provider == null) return
         _uiState.value = HomeUiState.Monitoring(reading = null)
-        SensorStreamService.start(getApplication())
+        SensorStreamService.start(getApplication(), provider)
 
         monitoringJob = viewModelScope.launch {
             combine(
