@@ -7,6 +7,7 @@ import com.google.android.gms.wearable.Wearable
 import br.unioeste.pulselab.wear.data.health.SensorStreamService
 import br.unioeste.pulselab.wear.data.health.SensorStreamStore
 import br.unioeste.pulselab.wear.data.provider.ProviderChoice
+import br.unioeste.pulselab.wear.data.provider.ProviderSelection
 import br.unioeste.pulselab.wear.model.SensorBundle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,6 +45,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _isPhoneConnected = MutableStateFlow(false)
     val isPhoneConnected: StateFlow<Boolean> = _isPhoneConnected.asStateFlow()
 
+    /**
+     * Which source the service is pointed at. Read from storage rather than
+     * defaulted, so reopening the app mid-run shows what is actually streaming.
+     */
+    private val _provider = MutableStateFlow(ProviderSelection.selected(application))
+    val provider: StateFlow<ProviderChoice> = _provider.asStateFlow()
+
     private var monitoringJob: Job? = null
 
     init {
@@ -76,6 +84,31 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         phoneReachable = reachable
                     )
                 }
+        }
+    }
+
+    /**
+     * Cycles to the next provider and restarts collection on it.
+     *
+     * Present so the acceptance criterion of Objetivo 4 can be exercised on
+     * device: switching source has to change the `providerId` and the set of
+     * populated fields with nothing downstream changing. It is also how an
+     * evaluation run points the watch at the deterministic provider without a
+     * rebuild.
+     */
+    fun cycleProvider() {
+        val next = ProviderChoice.entries[
+            (ProviderChoice.entries.indexOf(_provider.value) + 1) % ProviderChoice.entries.size
+        ]
+        _provider.value = next
+        // Clear the mirrored reading: the next sample comes from a different
+        // source, and leaving the previous provider's values on screen would
+        // read as if the new one had already produced them.
+        SensorStreamStore.reset()
+        if (monitoringJob?.isActive == true) {
+            SensorStreamService.start(getApplication(), next)
+        } else {
+            ProviderSelection.select(getApplication(), next)
         }
     }
 

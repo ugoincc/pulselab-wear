@@ -8,6 +8,7 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,6 +37,7 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
+import br.unioeste.pulselab.wear.data.provider.ProviderChoice
 import br.unioeste.pulselab.wear.model.HealthMetric
 import br.unioeste.pulselab.wear.model.SensorBundle
 import br.unioeste.pulselab.wear.presentation.theme.PulseLabColors
@@ -93,13 +95,16 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     if (hasPermission) {
         val uiState by viewModel.uiState.collectAsState()
         val isPhoneConnected by viewModel.isPhoneConnected.collectAsState()
+        val provider by viewModel.provider.collectAsState()
         // Relay behavior: start streaming as soon as we can, no tap required.
         LaunchedEffect(Unit) { viewModel.startSession() }
         HomeScreenContent(
             uiState = uiState,
             isPhoneConnected = isPhoneConnected,
+            provider = provider,
             onStart = { viewModel.startSession() },
-            onStop = { viewModel.stopSession() }
+            onStop = { viewModel.stopSession() },
+            onCycleProvider = { viewModel.cycleProvider() }
         )
     } else {
         BodySensorsRationaleScreen(
@@ -169,8 +174,10 @@ private fun SensorBundle?.orbValue(metric: HealthMetric): String? = when (metric
 fun HomeScreenContent(
     uiState: HomeUiState,
     isPhoneConnected: Boolean = false,
+    provider: ProviderChoice = ProviderChoice.SAMSUNG,
     onStart: () -> Unit,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    onCycleProvider: () -> Unit = {}
 ) {
     AppScaffold {
         val listState = rememberTransformingLazyColumnState()
@@ -195,6 +202,23 @@ fun HomeScreenContent(
                         color = if (isPhoneConnected) PulseLabColors.Green else PulseLabColors.TextSecondary,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                    )
+                }
+
+                // Tap to cycle the source. Deliberately a plain line rather
+                // than a control with affordance: it exists for the evaluation
+                // procedure (cap6-avaliacao.tex §6.6), not for the wearer, and
+                // an inviting button would get pressed by accident mid-run.
+                item {
+                    Text(
+                        text = "fonte: ${provider.id}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = PulseLabColors.TextSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onCycleProvider)
+                            .padding(bottom = 4.dp)
                     )
                 }
 
