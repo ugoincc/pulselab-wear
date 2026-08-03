@@ -279,7 +279,11 @@ fun PreviewMonitoring() {
             reading = SensorReading(
                 bpm = 72.0, hrv = 48, spo2 = 98, skinTemp = 32.4,
                 baevskySI = 118.0, edaTonic = 4.82, edaScrPerMin = 3,
-                motionFlag = false, timestamp = 1_700_000_000_000L
+                motionFlag = false, timestamp = 1_700_000_000_000L,
+                sequenceNumber = 0L,
+                spo2MeasuredAt = 1_700_000_000_000L,
+                skinTempMeasuredAt = 1_700_000_000_000L,
+                providerId = "samsung-shs-sdk"
             ),
             phoneReachable = true
         ),

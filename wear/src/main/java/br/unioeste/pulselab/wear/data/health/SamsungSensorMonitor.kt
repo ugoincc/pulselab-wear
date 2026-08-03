@@ -39,6 +39,15 @@ private const val SKIN_TEMP_STATUS_VALID = 0 // confirmed: 0 == valid (NOT 1)
 private const val SPO2_REARM_INTERVAL_MS = 5 * 60_000L
 
 /**
+ * [br.unioeste.pulselab.wear.data.provider.SensorProvider.providerId] for this source.
+ * Stamped onto every [SensorReading] here (not left to the provider wrapper)
+ * because [SensorReading] itself carries `providerId` per
+ * ESPECIFICACAO-protocolo-payload-v1.md §4 — [br.unioeste.pulselab.wear.data.provider.SamsungSensorProvider]
+ * reads this same constant rather than duplicating the literal.
+ */
+const val SAMSUNG_PROVIDER_ID = "samsung-shs-sdk"
+
+/**
  * The watch's single source of biometrics, backed by the Samsung Health Sensor
  * SDK. Emits one batch of [SensorReading] per SDK callback, carrying every
  * channel the watch can read.
@@ -83,6 +92,19 @@ class SamsungSensorMonitor(context: Context) {
             // next HR emission. Single-threaded callbacks, so plain vars are fine.
             var latestSpo2: Int? = null
             var latestSkinTemp: Double? = null
+            // Epoch ms of the data point that produced the value above — distinct
+            // from the HR emission's own timestamp (ESPECIFICACAO-protocolo-payload-v1.md §4).
+            var latestSpo2MeasuredAt: Long? = null
+            var latestSkinTempMeasuredAt: Long? = null
+
+            // sequenceNumber (ESPECIFICACAO-protocolo-payload-v1.md §5): one per
+            // SensorReading emitted, not per batch. Reset to 0 here, i.e. every
+            // time readingFlow() is (re)collected — the only real connection
+            // lifecycle this class has today (SensorConnectionManager.connect()
+            // below), since neither MessageClient nor NodeClient (WearDataSender)
+            // are held as persistent objects anywhere in this codebase to hang a
+            // "reconnect" event off of.
+            var sequenceNumber = 0L
 
             var hrTracker: HealthTracker? = null
             var spo2Tracker: HealthTracker? = null
@@ -174,7 +196,11 @@ class SamsungSensorMonitor(context: Context) {
                                 edaTonic = null,
                                 edaScrPerMin = null,
                                 motionFlag = moving,
-                                timestamp = dp.getTimestamp()
+                                timestamp = dp.getTimestamp(),
+                                sequenceNumber = sequenceNumber++,
+                                spo2MeasuredAt = latestSpo2MeasuredAt,
+                                skinTempMeasuredAt = latestSkinTempMeasuredAt,
+                                providerId = SAMSUNG_PROVIDER_ID
                             )
                         }
                     }
@@ -195,6 +221,7 @@ class SamsungSensorMonitor(context: Context) {
                         val spo2 = dp.getValue(ValueKey.SpO2Set.SPO2)
                         if (status == SPO2_STATUS_COMPLETED && spo2 != null && spo2 > 0) {
                             latestSpo2 = spo2
+                            latestSpo2MeasuredAt = dp.getTimestamp()
                         }
                     }
                 }
@@ -212,6 +239,7 @@ class SamsungSensorMonitor(context: Context) {
                         val temp = dp.getValue(ValueKey.SkinTemperatureSet.OBJECT_TEMPERATURE)
                         if (status == SKIN_TEMP_STATUS_VALID && temp != null && temp > 0) {
                             latestSkinTemp = temp.toDouble()
+                            latestSkinTempMeasuredAt = dp.getTimestamp()
                         }
                     }
                 }

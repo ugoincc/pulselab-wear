@@ -17,7 +17,17 @@ data class SensorBundle(
     val edaTonic: Double?,
     val edaScrPerMin: Int?,
     val motionFlag: Boolean,
-    val timestamp: Long
+    val timestamp: Long,
+    /** ESPECIFICACAO-protocolo-payload-v1.md §2/§4. Mirrors [SensorReading.schemaVersion]. */
+    val schemaVersion: Int = SENSOR_SCHEMA_VERSION,
+    /** Mirrors [SensorReading.sequenceNumber] — see §5 for reset semantics. */
+    val sequenceNumber: Long,
+    /** Mirrors [SensorReading.spo2MeasuredAt]. Null iff [spo2] is null. */
+    val spo2MeasuredAt: Long?,
+    /** Mirrors [SensorReading.skinTempMeasuredAt]. Null iff [skinTemp] is null. */
+    val skinTempMeasuredAt: Long?,
+    /** Mirrors [SensorReading.providerId]. */
+    val providerId: String
 )
 
 /**

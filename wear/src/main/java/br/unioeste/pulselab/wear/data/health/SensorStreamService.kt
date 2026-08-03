@@ -79,7 +79,12 @@ class SensorStreamService : Service() {
                                     edaTonic = reading.edaTonic,
                                     edaScrPerMin = reading.edaScrPerMin,
                                     motionFlag = reading.motionFlag,
-                                    timestamp = reading.timestamp
+                                    timestamp = reading.timestamp,
+                                    schemaVersion = reading.schemaVersion,
+                                    sequenceNumber = reading.sequenceNumber,
+                                    spo2MeasuredAt = reading.spo2MeasuredAt,
+                                    skinTempMeasuredAt = reading.skinTempMeasuredAt,
+                                    providerId = reading.providerId
                                 )
                             }
                         )

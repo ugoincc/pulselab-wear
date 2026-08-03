@@ -10,4 +10,18 @@ object MessagePaths {
      * silent beats failing wrong.
      */
     const val SENSOR_BATCH = "/sensor/batch"
+
+    /**
+     * One message per provider connection, carrying a `CapabilityAnnouncement`
+     * (ESPECIFICACAO-protocolo-payload-v1.md §6.3) — sent once, not per sample,
+     * separate from [SENSOR_BATCH] so the phone doesn't have to unpack a
+     * capability declaration out of every batch.
+     *
+     * Not yet wired to any sender call in production code this iteration:
+     * [br.unioeste.pulselab.wear.data.wearable.WearDataSender.sendCapabilities] exists
+     * and can announce on this path, but nothing in [br.unioeste.pulselab.wear.data.health.SensorStreamService]
+     * invokes it yet — that lands when the service switches from calling
+     * `SamsungSensorMonitor` directly to going through `SensorProvider`.
+     */
+    const val SENSOR_CAPABILITIES = "/sensor/capabilities"
 }

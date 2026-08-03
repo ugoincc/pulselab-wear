@@ -55,7 +55,7 @@ from RMSSD rather than reading it live.
 |--------|-------------------|-------|
 | **HR** | ✅ Health Services (`MeasureClient` / `PassiveMonitoringClient`) **or** Samsung SDK | Samsung SDK's HR tracker also carries the IBI we need for HRV |
 | **HRV** | ✅ Samsung SDK — RMSSD computed from IBI (Sensor source) | `Hrv.kt`: sliding `IbiWindow`, IBIs filtered by status before RMSSD |
-| **SpO2** | ✅ Samsung SDK — `SPO2_ON_DEMAND`, re-armed every 60 s (Sensor source) | on-demand: one ~30 s measurement per arm, so we re-arm to keep it fresh |
+| **SpO2** | ✅ Samsung SDK — `SPO2_ON_DEMAND`, re-armed every 5 min (Sensor source) | on-demand: one ~30 s measurement per arm, so we re-arm to keep it fresh |
 | **Skin Temp** | ✅ Samsung SDK — `SKIN_TEMPERATURE_CONTINUOUS` (Sensor source) | continuous, slower cadence than HR |
 | **Stress** | ❌ no live source | Samsung-proprietary; **derive offline from RMSSD** (no AOSP/SDK live API) |
 
@@ -105,7 +105,10 @@ no new transport.
    sliding `IbiWindow`; each HR emission carries the window's current **RMSSD** as
    HRV. IBIs are filtered by status first — bad IBIs inflate RMSSD.
 3. **SpO₂** (`SPO2_ON_DEMAND`) is on-demand: one ~30 s measurement per arm, so it
-   is **re-armed every 60 s**. Only one on-demand tracker may run at a time.
+   is **re-armed every 5 min** (`SPO2_REARM_INTERVAL_MS`). Only one on-demand
+   tracker may run at a time. It was 60 s, which kept the optical LEDs lit
+   roughly half the time for a value that barely moves at rest — see
+   `SENSORS.md` §6.
 4. **Skin temperature** (`SKIN_TEMPERATURE_CONTINUOUS`) runs continuously at a
    slower cadence. SpO₂ and skin-temp update "latest" values that ride along on
    the next HR emission.
