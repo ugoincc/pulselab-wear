@@ -21,6 +21,18 @@ Essas duas últimas pendências não são esquecimento: com um provedor só, nem
 a indireção nem o anúncio de capacidade informam nada. Elas se resolvem na
 tarefa 2 abaixo, que é quando passam a ter alternativa do outro lado.
 
+## Estado (2026-08-03)
+
+| Tarefa | Estado |
+|---|---|
+| 1 — `ReplayProvider` | **feita**, validada em dispositivo (determinismo entre duas execuções reais) |
+| 2 — `HealthServicesProvider` + seleção | **feita**, validada em dispositivo e ponta a ponta no app |
+| 3 — Coletor no app companion | **feita** (`src/wearable/evaluationCollector.ts` + `EvaluationLog.kt`), execução real pendente |
+| 4 — Harness de conciliação | **feita** (`tools/reconcile.py`), verificada com registros sintéticos |
+
+O que falta é executar uma sessão de replay com os dois registros ligados e
+passar o par pelo `reconcile.py` — a primeira medida real de perda e latência.
+
 ## Ordem de execução
 
 As quatro tarefas são sequencialmente dependentes: 1 → 2 → 3 → 4. Não vale
