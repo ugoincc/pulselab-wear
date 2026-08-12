@@ -1,0 +1,5 @@
+# detekt-cli tem ~70 MB e é baixado por run.sh na primeira execução.
+.bin/
+# Log verboso do detekt; os dados ficam nos CSVs e no XML.
+resultados/detekt-log.txt
+__pycache__/

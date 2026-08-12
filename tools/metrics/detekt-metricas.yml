@@ -1,0 +1,22 @@
+# Configuração usada apenas para medir, não para reprovar build.
+#
+# threshold: 1 faz a regra reportar TODA função em vez de só as que passam de
+# um limiar. O que interessa ao capítulo 6 é a distribuição da complexidade
+# ciclomática, não a lista de infrações — o limiar de 10 proposto por McCabe
+# (1976) é aplicado depois, na análise, por cc_detekt.py.
+#
+# Os três `ignore*` ficam desligados de propósito: são atenuações que o detekt
+# oferece por conveniência de estilo, e ligá-las afastaria a contagem da
+# definição original de McCabe.
+build:
+  maxIssues: 2147483647
+config:
+  validation: false
+complexity:
+  active: true
+  CyclomaticComplexMethod:
+    active: true
+    threshold: 1
+    ignoreSingleWhenExpression: false
+    ignoreSimpleWhenEntries: false
+    ignoreNestingFunctions: false

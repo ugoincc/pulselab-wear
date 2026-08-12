@@ -1,0 +1,9 @@
+escopo,funcoes,soma,mediana,maximo,acima_do_limiar
+br/unioeste/pulselab/wear/data/health,39,102,2,11,1
+br/unioeste/pulselab/wear/data/provider,36,53,1.0,5,0
+br/unioeste/pulselab/wear/data/wearable,2,9,4.5,5,0
+br/unioeste/pulselab/wear/presentation,1,1,1,1,0
+br/unioeste/pulselab/wear/presentation/bia,13,27,1,5,0
+br/unioeste/pulselab/wear/presentation/home,13,46,2,11,1
+br/unioeste/pulselab/wear/presentation/theme,1,1,1,1,0
+total,105,239,1,11,2
