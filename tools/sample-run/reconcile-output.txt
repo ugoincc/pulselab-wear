@@ -1,0 +1,22 @@
+==================================================================
+CONCILIAÇÃO DA EXECUÇÃO
+==================================================================
+emitidas (S):  132
+recebidas (R): 132
+entregues:     132
+
+Taxa de perda: 0.00%  (0 amostras)
+
+Reordenamento: 0 ocorrência(s)
+
+Latência fim a fim (NÃO CORRIGIDA — contém deriva de relógio):
+  n=132 min=81ms mediana=120.0ms max=592ms
+
+Variação da latência (diferenças sucessivas, RFC 3393):
+  n=131 min=-490ms mediana=3.0ms max=490ms
+
+Travessia nativo→JS (imune a deriva: mesmo relógio nas duas pontas):
+  n=132 min=6ms mediana=9.0ms max=13ms
+
+Divergência de conteúdo: 0 amostra(s)
+==================================================================

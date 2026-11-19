@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<checkstyle version="4.3">
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/health/SensorStreamStore.kt">
+	<error line="30" column="9" severity="warning" message="The function update appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="34" column="9" severity="warning" message="The function recordSend appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="38" column="9" severity="warning" message="The function setRunning appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="42" column="9" severity="warning" message="The function reset appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/health/EdaFeatures.kt">
+	<error line="46" column="9" severity="warning" message="The function add appears to be too complex based on Cyclomatic Complexity (complexity: 3). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="58" column="9" severity="warning" message="The function tonicLevel appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="66" column="9" severity="warning" message="The function scrPerMinute appears to be too complex based on Cyclomatic Complexity (complexity: 8). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="86" column="9" severity="warning" message="The function clear appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/health/MotionGate.kt">
+	<error line="27" column="9" severity="warning" message="The function add appears to be too complex based on Cyclomatic Complexity (complexity: 3). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="45" column="9" severity="warning" message="The function peakToPeak appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="55" column="9" severity="warning" message="The function isMoving appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="57" column="9" severity="warning" message="The function clear appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/health/SensorStreamService.kt">
+	<error line="66" column="18" severity="warning" message="The function onBind appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="68" column="18" severity="warning" message="The function onStartCommand appears to be too complex based on Cyclomatic Complexity (complexity: 9). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="136" column="25" severity="warning" message="The function announce appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="147" column="17" severity="warning" message="The function startAsForeground appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="178" column="17" severity="warning" message="The function acquireWakeLock appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="184" column="18" severity="warning" message="The function onDestroy appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="204" column="13" severity="warning" message="The function start appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="210" column="13" severity="warning" message="The function stop appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/health/SensorConnectionManager.kt">
+	<error line="50" column="9" severity="warning" message="The function connect appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="55" column="9" severity="warning" message="The function disconnect appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="65" column="9" severity="warning" message="The function supportedTypes appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="68" column="9" severity="warning" message="The function isSupported appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="71" column="9" severity="warning" message="The function tracker appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/health/SamsungSensorMonitor.kt">
+	<error line="82" column="9" severity="warning" message="The function readingFlow appears to be too complex based on Cyclomatic Complexity (complexity: 7). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/health/BiaMeasurementManager.kt">
+	<error line="58" column="9" severity="warning" message="The function measure appears to be too complex based on Cyclomatic Complexity (complexity: 3). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/health/BaevskyStressIndex.kt">
+	<error line="65" column="9" severity="warning" message="The function compute appears to be too complex based on Cyclomatic Complexity (complexity: 7). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="102" column="9" severity="warning" message="The function detrend appears to be too complex based on Cyclomatic Complexity (complexity: 3). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/health/Hrv.kt">
+	<error line="51" column="5" severity="warning" message="The function rmssd appears to be too complex based on Cyclomatic Complexity (complexity: 3). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="78" column="5" severity="warning" message="The function rmssdOverRuns appears to be too complex based on Cyclomatic Complexity (complexity: 4). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="103" column="5" severity="warning" message="The function ibiEndTimes appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="175" column="9" severity="warning" message="The function add appears to be too complex based on Cyclomatic Complexity (complexity: 11). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="219" column="9" severity="warning" message="The function noteDropped appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="227" column="9" severity="warning" message="The function currentRmssd appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="238" column="9" severity="warning" message="The function currentRuns appears to be too complex based on Cyclomatic Complexity (complexity: 5). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="262" column="9" severity="warning" message="The function currentIntervals appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="265" column="9" severity="warning" message="The function currentStressIndex appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="269" column="9" severity="warning" message="The function clear appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/wearable/WearDataSender.kt">
+	<error line="16" column="17" severity="warning" message="The function send appears to be too complex based on Cyclomatic Complexity (complexity: 5). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="45" column="17" severity="warning" message="The function sendCapabilities appears to be too complex based on Cyclomatic Complexity (complexity: 4). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/provider/SensorProvider.kt">
+	<error line="31" column="17" severity="warning" message="The function capabilities appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="41" column="9" severity="warning" message="The function readingFlow appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="44" column="9" severity="warning" message="The function disconnect appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/provider/EmissionLog.kt">
+	<error line="32" column="9" severity="warning" message="The function record appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="40" column="9" severity="warning" message="The function flush appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="43" column="9" severity="warning" message="The function close appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="65" column="18" severity="warning" message="The function record appears to be too complex based on Cyclomatic Complexity (complexity: 3). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="75" column="18" severity="warning" message="The function flush appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="81" column="18" severity="warning" message="The function close appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="97" column="5" severity="warning" message="The function createRunEmissionLog appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/provider/ReplaySeries.kt">
+	<error line="74" column="9" severity="warning" message="The function next appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="102" column="17" severity="warning" message="The function walk appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="114" column="17" severity="warning" message="The function round appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="120" column="18" severity="warning" message="The function toString appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/provider/SamsungSensorProvider.kt">
+	<error line="33" column="26" severity="warning" message="The function capabilities appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="42" column="18" severity="warning" message="The function readingFlow appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="64" column="18" severity="warning" message="The function disconnect appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/provider/ReplayProvider.kt">
+	<error line="75" column="26" severity="warning" message="The function capabilities appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="93" column="18" severity="warning" message="The function readingFlow appears to be too complex based on Cyclomatic Complexity (complexity: 4). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="128" column="18" severity="warning" message="The function disconnect appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="149" column="13" severity="warning" message="The function forEvaluation appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="176" column="26" severity="warning" message="The function toBundle appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/provider/HealthServicesProvider.kt">
+	<error line="118" column="26" severity="warning" message="The function capabilities appears to be too complex based on Cyclomatic Complexity (complexity: 3). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="132" column="25" severity="warning" message="The function supportsHeartRate appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="140" column="17" severity="warning" message="The function accelerometer appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="152" column="18" severity="warning" message="The function readingFlow appears to be too complex based on Cyclomatic Complexity (complexity: 5). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="266" column="17" severity="warning" message="The function accelerometerListener appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="285" column="18" severity="warning" message="The function disconnect appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="295" column="9" severity="warning" message="The function add appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="299" column="9" severity="warning" message="The function isMoving appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/data/provider/ProviderSelection.kt">
+	<error line="30" column="13" severity="warning" message="The function of appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="47" column="9" severity="warning" message="The function selected appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="50" column="9" severity="warning" message="The function select appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="60" column="9" severity="warning" message="The function configureReplay appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="81" column="9" severity="warning" message="The function create appears to be too complex based on Cyclomatic Complexity (complexity: 4). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="98" column="17" severity="warning" message="The function prefs appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/presentation/theme/Theme.kt">
+	<error line="29" column="5" severity="warning" message="The function PulseLabWearTheme appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/presentation/bia/BiaScreen.kt">
+	<error line="35" column="5" severity="warning" message="The function BiaScreen appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="45" column="5" severity="warning" message="The function BiaScreenContent appears to be too complex based on Cyclomatic Complexity (complexity: 5). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="71" column="13" severity="warning" message="The function InstructionsStep appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="107" column="13" severity="warning" message="The function MeasuringStep appears to be too complex based on Cyclomatic Complexity (complexity: 3). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="133" column="20" severity="warning" message="The function fmt appears to be too complex based on Cyclomatic Complexity (complexity: 3). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="137" column="13" severity="warning" message="The function ResultStep appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="176" column="13" severity="warning" message="The function FailedStep appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="202" column="5" severity="warning" message="The function PreviewBiaInstructions appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="208" column="5" severity="warning" message="The function PreviewBiaMeasuring appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="216" column="5" severity="warning" message="The function PreviewBiaResult appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/presentation/bia/BiaViewModel.kt">
+	<error line="38" column="9" severity="warning" message="The function startMeasurement appears to be too complex based on Cyclomatic Complexity (complexity: 5). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="68" column="9" severity="warning" message="The function reset appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="73" column="18" severity="warning" message="The function onCleared appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/presentation/home/MetricOrb.kt">
+	<error line="31" column="5" severity="warning" message="The function MetricOrb appears to be too complex based on Cyclomatic Complexity (complexity: 7). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/presentation/home/HomeScreen.kt">
+	<error line="60" column="5" severity="warning" message="The function HomeScreen appears to be too complex based on Cyclomatic Complexity (complexity: 6). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="125" column="13" severity="warning" message="The function BodySensorsRationaleScreen appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="163" column="27" severity="warning" message="The function orbValue appears to be too complex based on Cyclomatic Complexity (complexity: 8). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="174" column="5" severity="warning" message="The function HomeScreenContent appears to be too complex based on Cyclomatic Complexity (complexity: 11). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="300" column="5" severity="warning" message="The function PreviewMonitoring appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="322" column="5" severity="warning" message="The function PreviewWaitingForSensors appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="332" column="5" severity="warning" message="The function PreviewIdle appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="338" column="5" severity="warning" message="The function PreviewError appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/presentation/home/HomeViewModel.kt">
+	<error line="70" column="9" severity="warning" message="The function startSession appears to be too complex based on Cyclomatic Complexity (complexity: 4). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="99" column="9" severity="warning" message="The function cycleProvider appears to be too complex based on Cyclomatic Complexity (complexity: 2). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="115" column="9" severity="warning" message="The function stopSession appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+	<error line="123" column="18" severity="warning" message="The function onCleared appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+<file name="wear/src/main/java/br/unioeste/pulselab/wear/presentation/MainActivity.kt">
+	<error line="11" column="18" severity="warning" message="The function onCreate appears to be too complex based on Cyclomatic Complexity (complexity: 1). Defined complexity threshold for methods is set to &apos;1&apos;" source="detekt.CyclomaticComplexMethod" />
+</file>
+</checkstyle>

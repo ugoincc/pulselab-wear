@@ -6,15 +6,13 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -30,47 +28,36 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import br.unioeste.pulselab.wear.BuildConfig
-import br.unioeste.pulselab.wear.model.HealthMetric
-import br.unioeste.pulselab.wear.presentation.bia.BiaScreen
-import br.unioeste.pulselab.wear.presentation.debug.SensorCapabilityScreen
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.EdgeButton
-import androidx.wear.compose.material3.Icon
-import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
-import androidx.wear.compose.material3.OutlinedButton
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
+import br.unioeste.pulselab.wear.data.provider.ProviderChoice
+import br.unioeste.pulselab.wear.model.HealthMetric
+import br.unioeste.pulselab.wear.model.SensorBundle
+import br.unioeste.pulselab.wear.presentation.theme.PulseLabColors
 
 // HomeScreen is split into two layers:
 //   HomeScreen        — knows about the ViewModel (stateful, not previewable)
 //   HomeScreenContent — only knows about data + callbacks (stateless, previewable)
+//
+// Body composition (BIA) is deliberately not reachable from here: the Galaxy Watch
+// Ultra advertises BIA_ON_DEMAND but rejects the tracker, so the flow is parked
+// until that is resolved. BiaScreen/BiaViewModel/BiaMeasurementManager are kept in
+// the tree, unreferenced, to be wired back once it works.
 
-private enum class SubScreen { NONE, BIA, DEBUG }
+private val REQUIRED_PERMISSIONS = arrayOf(
+    Manifest.permission.BODY_SENSORS,
+    Manifest.permission.ACTIVITY_RECOGNITION
+)
 
 @Composable
 fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
-    var subScreen by remember { mutableStateOf(SubScreen.NONE) }
-
-    when (subScreen) {
-        SubScreen.BIA -> {
-            BackHandler { subScreen = SubScreen.NONE }
-            BiaScreen()
-            return
-        }
-        SubScreen.DEBUG -> {
-            BackHandler { subScreen = SubScreen.NONE }
-            SensorCapabilityScreen()
-            return
-        }
-        SubScreen.NONE -> Unit
-    }
-
     val context = LocalContext.current
 
     var hasPermission by remember {
@@ -82,9 +69,14 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     var isPermanentlyDenied by remember { mutableStateOf(false) }
     var permissionRequested by remember { mutableStateOf(false) }
 
+    // ACTIVITY_RECOGNITION is requested alongside BODY_SENSORS because the Samsung
+    // accelerometer tracker needs it, but the screen is NOT gated on it: without
+    // it the motion gate simply never flags a window, and the other five metrics
+    // are unaffected.
     val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val granted = results[Manifest.permission.BODY_SENSORS] == true
         if (granted) {
             hasPermission = true
         } else {
@@ -103,20 +95,21 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     if (hasPermission) {
         val uiState by viewModel.uiState.collectAsState()
         val isPhoneConnected by viewModel.isPhoneConnected.collectAsState()
+        val provider by viewModel.provider.collectAsState()
         // Relay behavior: start streaming as soon as we can, no tap required.
         LaunchedEffect(Unit) { viewModel.startSession() }
         HomeScreenContent(
             uiState = uiState,
             isPhoneConnected = isPhoneConnected,
+            provider = provider,
             onStart = { viewModel.startSession() },
-            onStop  = { viewModel.stopSession() },
-            onOpenBia = { subScreen = SubScreen.BIA },
-            onOpenDebug = { subScreen = SubScreen.DEBUG }
+            onStop = { viewModel.stopSession() },
+            onCycleProvider = { viewModel.cycleProvider() }
         )
     } else {
         BodySensorsRationaleScreen(
             isPermanentlyDenied = isPermanentlyDenied,
-            onGrantPermission = { launcher.launch(Manifest.permission.BODY_SENSORS) },
+            onGrantPermission = { launcher.launch(REQUIRED_PERMISSIONS) },
             onOpenSettings = {
                 context.startActivity(
                     Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -146,23 +139,17 @@ private fun BodySensorsRationaleScreen(
                 }
                 item {
                     Text(
-                        text = "O app precisa acessar os sensores do relógio para monitorar sua frequência cardíaca.",
+                        text = "O app precisa acessar os sensores do relógio para monitorar sua biometria.",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
                 item {
                     if (isPermanentlyDenied) {
-                        Button(
-                            onClick = onOpenSettings,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                        Button(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
                             Text("Abrir Configurações")
                         }
                     } else {
-                        Button(
-                            onClick = onGrantPermission,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
+                        Button(onClick = onGrantPermission, modifier = Modifier.fillMaxWidth()) {
                             Text("Permitir acesso")
                         }
                     }
@@ -172,33 +159,25 @@ private fun BodySensorsRationaleScreen(
     }
 }
 
-// Resolve a metric to its current display value from the Monitoring state.
-private fun HomeUiState.Monitoring.valueFor(metric: HealthMetric): String? = when (metric) {
-    HealthMetric.HEART_RATE -> bpm?.let { "%.0f".format(it) }
-    HealthMetric.HRV -> hrv?.toString()
-    HealthMetric.SPO2 -> spo2?.toString()
-    HealthMetric.SKIN_TEMP -> skinTemp?.let { "%.1f".format(it) }
-    HealthMetric.STRESS -> stressIndex?.toString()
+/** Formats a metric for its orb, or null when that sensor has no value yet. */
+private fun SensorBundle?.orbValue(metric: HealthMetric): String? = when (metric) {
+    HealthMetric.HEART_RATE -> this?.bpm?.toString()
+    HealthMetric.HRV -> this?.hrv?.toString()
+    HealthMetric.STRESS_INDEX -> this?.baevskySI?.let { "%.0f".format(it) }
+    HealthMetric.SPO2 -> this?.spo2?.toString()
+    HealthMetric.SKIN_TEMP -> this?.skinTemp?.let { "%.1f".format(it) }
 }
 
-private val METRIC_NAMES = mapOf(
-    HealthMetric.HEART_RATE to "Frequência cardíaca",
-    HealthMetric.HRV to "Variabilidade (HRV)",
-    HealthMetric.SPO2 to "Oxigenação (SpO2)",
-    HealthMetric.SKIN_TEMP to "Temperatura da pele",
-    HealthMetric.STRESS to "Estresse",
-)
-
 // ─── STATELESS CONTENT ──────────────────────────────────────────────────────
+
 @Composable
 fun HomeScreenContent(
     uiState: HomeUiState,
     isPhoneConnected: Boolean = false,
+    provider: ProviderChoice = ProviderChoice.SAMSUNG,
     onStart: () -> Unit,
     onStop: () -> Unit,
-    onOpenBia: () -> Unit = {},
-    showDebugEntry: Boolean = BuildConfig.DEBUG,
-    onOpenDebug: () -> Unit = {}
+    onCycleProvider: () -> Unit = {}
 ) {
     AppScaffold {
         val listState = rememberTransformingLazyColumnState()
@@ -207,114 +186,107 @@ fun HomeScreenContent(
             scrollState = listState,
             edgeButton = {
                 when (uiState) {
-                    is HomeUiState.Idle, is HomeUiState.Error -> {
+                    is HomeUiState.Idle, is HomeUiState.Error ->
                         EdgeButton(onClick = onStart) { Text("Iniciar") }
-                    }
-                    is HomeUiState.Monitoring -> {
+                    is HomeUiState.Monitoring ->
                         EdgeButton(onClick = onStop) { Text("Parar") }
-                    }
                 }
             }
         ) { contentPadding ->
             TransformingLazyColumn(contentPadding = contentPadding, state = listState) {
 
                 item {
-                    ListHeader(modifier = Modifier.fillMaxWidth()) {
-                        Text("PulseLab")
-                    }
-                }
-
-                // Phone connection status, always visible.
-                item {
                     Text(
                         text = if (isPhoneConnected) "● Celular conectado" else "○ Celular desconectado",
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isPhoneConnected) Color(0xFF4CAF50)
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isPhoneConnected) PulseLabColors.Green else PulseLabColors.TextSecondary,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                    )
+                }
+
+                // Tap to cycle the source. Deliberately a plain line rather
+                // than a control with affordance: it exists for the evaluation
+                // procedure (cap6-avaliacao.tex §6.6), not for the wearer, and
+                // an inviting button would get pressed by accident mid-run.
+                item {
+                    Text(
+                        text = "fonte: ${provider.id}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = PulseLabColors.TextSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onCycleProvider)
+                            .padding(bottom = 4.dp)
                     )
                 }
 
                 when (val state = uiState) {
 
-                    is HomeUiState.Idle -> {
-                        item {
-                            Text(
-                                text = "Monitoramento parado. Toque em Iniciar para retomar.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                            )
-                        }
+                    is HomeUiState.Idle -> item {
+                        Text(
+                            text = "Monitoramento parado.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
 
                     is HomeUiState.Monitoring -> {
-                        HealthMetric.entries.forEach { metric ->
+                        // Two orbs per row: the widest pair that stays legible
+                        // inside a round display's usable width.
+                        HealthMetric.entries.chunked(2).forEach { pair ->
                             item {
-                                val value = state.valueFor(metric)
                                 Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(
+                                        10.dp, Alignment.CenterHorizontally
+                                    )
                                 ) {
-                                    Text(
-                                        text = METRIC_NAMES.getValue(metric),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        text = value?.let { "$it ${metric.unit}" } ?: "—",
-                                        style = MaterialTheme.typography.titleSmall
-                                    )
+                                    pair.forEach { metric ->
+                                        MetricOrb(
+                                            metric = metric,
+                                            value = state.reading.orbValue(metric)
+                                        )
+                                    }
                                 }
                             }
                         }
 
-                        item {
-                            Text(
-                                text = "A coleta continua com a tela desligada.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-                            )
+                        // Only shown while it is true — a permanent "parado" line
+                        // would be noise on a screen meant to stay quiet.
+                        if (state.reading?.motionFlag == true) {
+                            item {
+                                Text(
+                                    text = "movimento detectado",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = PulseLabColors.Warning,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                                )
+                            }
                         }
                     }
 
                     is HomeUiState.Error -> {
                         item {
-                            Text(text = "Algo deu errado", style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                text = "Algo deu errado",
+                                style = MaterialTheme.typography.titleMedium,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                         item {
-                            Text(text = state.message, style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                text = state.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
-                }
-
-                // Body composition (BIA) — on-demand guided measurement.
-                item {
-                    OutlinedButton(onClick = onOpenBia, modifier = Modifier.fillMaxWidth()) {
-                        Text("Composição corporal")
-                    }
-                }
-
-                if (showDebugEntry) {
-                    item {
-                        Button(onClick = onOpenDebug, modifier = Modifier.fillMaxWidth()) {
-                            Text("Debug: capacidades")
-                        }
-                    }
-                }
-
-                item {
-                    Text(
-                        text = "v${BuildConfig.VERSION_NAME}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
             }
         }
@@ -325,17 +297,19 @@ fun HomeScreenContent(
 
 @WearPreviewDevices
 @Composable
-fun PreviewIdle() {
-    HomeScreenContent(uiState = HomeUiState.Idle, onStart = {}, onStop = {})
-}
-
-@WearPreviewDevices
-@Composable
-fun PreviewMonitoringSensor() {
+fun PreviewMonitoring() {
     HomeScreenContent(
         uiState = HomeUiState.Monitoring(
-            bpm = 72.0, hrv = 48, spo2 = 98, stressIndex = null, skinTemp = 32.4,
-            readingsSent = 41, phoneReachable = true, lastUpdate = 1_700_000_000_000L
+            reading = SensorBundle(
+                bpm = 72, hrv = 48, spo2 = 98, skinTemp = 32.4,
+                baevskySI = 118.0, edaTonic = 4.82, edaScrPerMin = 3,
+                motionFlag = false, timestamp = 1_700_000_000_000L,
+                sequenceNumber = 0L,
+                spo2MeasuredAt = 1_700_000_000_000L,
+                skinTempMeasuredAt = 1_700_000_000_000L,
+                providerId = "samsung-shs-sdk"
+            ),
+            phoneReachable = true
         ),
         isPhoneConnected = true,
         onStart = {},
@@ -345,15 +319,18 @@ fun PreviewMonitoringSensor() {
 
 @WearPreviewDevices
 @Composable
-fun PreviewMonitoringNoPhone() {
+fun PreviewWaitingForSensors() {
     HomeScreenContent(
-        uiState = HomeUiState.Monitoring(
-            bpm = 71.0, hrv = null, spo2 = null, stressIndex = null, skinTemp = null,
-            readingsSent = 3, phoneReachable = false
-        ),
+        uiState = HomeUiState.Monitoring(reading = null),
         onStart = {},
         onStop = {}
     )
+}
+
+@WearPreviewDevices
+@Composable
+fun PreviewIdle() {
+    HomeScreenContent(uiState = HomeUiState.Idle, onStart = {}, onStop = {})
 }
 
 @WearPreviewDevices
@@ -363,16 +340,5 @@ fun PreviewError() {
         uiState = HomeUiState.Error("Não foi possível conectar aos sensores"),
         onStart = {},
         onStop = {}
-    )
-}
-
-@WearPreviewDevices
-@Composable
-fun PreviewProductionNoDebug() {
-    HomeScreenContent(
-        uiState = HomeUiState.Idle,
-        onStart = {},
-        onStop = {},
-        showDebugEntry = false
     )
 }
