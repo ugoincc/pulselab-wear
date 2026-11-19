@@ -178,9 +178,10 @@ de foreground service sob pressão de bateria.
 ```
 RELÓGIO (relay, fonte única)                      CELULAR
 ┌────────────────────────────────┐   Data Layer   ┌───────────────────────────┐
-│ SensorStreamService (FGS)      │  /sensor/data  │ WearableHeartRate-        │
-│  └ SamsungSensorMonitor        │ ──────────────▶│ ListenerService           │
-│     HR+IBI → RMSSD + SI        │   (JSON 1/s)   │  └ WearBridge → JS        │
+│ SensorStreamService (FGS)      │ /sensor/batch  │ WearableHeartRate-        │
+│  └ SensorProvider (Samsung SDK,│ ──────────────▶│ ListenerService           │
+│     Health Services ou Replay) │ (1 msg/rajada) │  └ WearBridge → JS        │
+│     HR+IBI → RMSSD + SI        │                │                           │
 │     SpO2, temp. de pele        │                │     índice composto       │
 │     EDA → SCL + SCR/min        │                │     (z-score vs baseline) │
 │     Accel → motionFlag         │                │     + storage local       │
@@ -188,14 +189,19 @@ RELÓGIO (relay, fonte única)                      CELULAR
 └────────────────────────────────┘
 ```
 
-Payload em `/sensor/data` (`SensorBundle`, serializado por Gson):
+Payload em `/sensor/batch` (`SensorBatch` com uma lista de `SensorBundle`,
+serializado por Gson; contrato completo em `ESPECIFICACAO-protocolo-payload-v1.md`).
+O caminho antigo `/sensor/data`, uma amostra por mensagem, foi substituído — ver §4.4.
+As capacidades do provedor vão uma vez por conexão em `/sensor/capabilities`.
 
 ```json
-{
-  "bpm": 78, "hrv": 42, "spo2": 97, "skinTemp": 33.1,
-  "baevskySI": 61.4, "edaTonic": 4.82, "edaScrPerMin": 3,
-  "motionFlag": false, "timestamp": 1732650000000
-}
+{ "samples": [ {
+  "schemaVersion": 1, "sequenceNumber": 42, "providerId": "samsung-shs-sdk",
+  "bpm": 78, "hrv": 42, "baevskySI": 61.4, "timestamp": 1732650000000,
+  "spo2": 97, "spo2MeasuredAt": 1732649820000,
+  "skinTemp": 33.1, "skinTempMeasuredAt": 1732649990000,
+  "edaTonic": null, "edaScrPerMin": null, "motionFlag": false
+} ] }
 ```
 
 - Os nomes dos campos são o contrato com o `WearBridge` do app do celular —

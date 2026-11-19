@@ -1,5 +1,7 @@
 # Handoff — Integração do Samsung Health Sensor SDK (watch-side)
 
+> **Nota (nov/2026):** documento histórico, escrito antes da camada de provedores e do transporte em lote. As menções a `ChannelClient`, `PassiveMonitoringClient` e `/sensor/data` descrevem o código daquela época; a arquitetura atual está no `README.md` e em `ESPECIFICACAO-protocolo-payload-v1.md`.
+
 > **Para:** Claude Code
 > **Projeto:** PulseLab — coleta de dados biométricos para pesquisa (TCC)
 > **Alvo:** Galaxy Watch Ultra (Wear OS powered by Samsung / One UI Watch 6)
