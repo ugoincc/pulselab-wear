@@ -28,7 +28,7 @@ existente = incrementa `schemaVersion` e exige que o consumidor declare
 quais versões suporta.
 
 **v1 = esta especificação.** Corresponde ao estado do código no commit
-`2e3061a` (branch `feature/indice-estresse-composto`, repo `pulselab-wear`),
+`612b107` (branch `feature/indice-estresse-composto`, repo `pulselab-wear`),
 mais os campos novos listados na Seção 4.
 
 ## 3. Dicionário de dados — campos existentes hoje (mantidos)

@@ -82,7 +82,7 @@ idênticas; `sequenceNumber` não tem buracos na origem.
 demonstração central da abstração.
 
 1. Criar `data/provider/HealthServicesProvider.kt` adaptando o código de
-   `LiveMeasureMonitor`/`PassiveMonitoringManager` (deletados em `d7f6a593`,
+   `LiveMeasureMonitor`/`PassiveMonitoringManager` (deletados em `5ed6b6f8`,
    recuperáveis do histórico do git). **Adaptar, não copiar**: o payload
    mudou de forma desde então.
    - `providerId = "health-services"`.

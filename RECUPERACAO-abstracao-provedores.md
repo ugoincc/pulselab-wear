@@ -4,10 +4,10 @@
 
 O handoff trata `SensorTracker`/`DebugSensorRegistry` e as fontes `LIVE`/`SIMULATED`/`BACKGROUND` como uma coisa só ("a abstração de múltiplos provedores"). São **duas abstrações diferentes, de propósitos distintos, deletadas em commits diferentes**, e isso muda o que dá para reaproveitar:
 
-1. **`SensorTracker`/`DebugSensorRegistry`** (pacote `data/health/debug/`) — abstrai **tipos de tracker dentro do próprio SDK Samsung** (ECG, PPG verde/vermelho/IR, BIA, MF-BIA, EDA, acelerômetro, suor). Todos os 9 são variações de "ler um `HealthTrackerType` do mesmo SDK". Não há Health Services, não há dado simulado, não há noção de "provedor" no sentido de fonte alternativa de hardware/software. Deletado em `ef31abb47a3137a1bbd708563f5ed967b465b2f9` ("feat: índice de estresse composto — features no relógio (Parte 1)"), 2026-07-27.
-2. **`DataSource` (`LIVE`/`BACKGROUND`/`SIMULATED`/`SENSOR`) + `LiveMeasureMonitor`/`PassiveMonitoringManager`/`PassiveDataService`/`PassiveHeartRateStore`/`HeartRateRepository`** — esta sim é uma abstração de **fontes de dado concorrentes e mutuamente exclusivas** (Health Services `MeasureClient`, Health Services `PassiveMonitoringClient`, feed fake, e o próprio SDK Samsung como quarto membro do enum). É a mais próxima do que o TCC precisa para múltiplos provedores + replay. Deletado em `d7f6a5931bcea27454374a2a8c611b0a2985fecb` ("refactor: single-source relay — Samsung SDK only, auto-start"), 2026-07-23 — **quatro dias antes** da outra remoção.
+1. **`SensorTracker`/`DebugSensorRegistry`** (pacote `data/health/debug/`) — abstrai **tipos de tracker dentro do próprio SDK Samsung** (ECG, PPG verde/vermelho/IR, BIA, MF-BIA, EDA, acelerômetro, suor). Todos os 9 são variações de "ler um `HealthTrackerType` do mesmo SDK". Não há Health Services, não há dado simulado, não há noção de "provedor" no sentido de fonte alternativa de hardware/software. Deletado em `e8d87c6c4df6d2a8e7be65275c48dc859db7add4` ("feat: índice de estresse composto — features no relógio (Parte 1)"), 2026-07-27.
+2. **`DataSource` (`LIVE`/`BACKGROUND`/`SIMULATED`/`SENSOR`) + `LiveMeasureMonitor`/`PassiveMonitoringManager`/`PassiveDataService`/`PassiveHeartRateStore`/`HeartRateRepository`** — esta sim é uma abstração de **fontes de dado concorrentes e mutuamente exclusivas** (Health Services `MeasureClient`, Health Services `PassiveMonitoringClient`, feed fake, e o próprio SDK Samsung como quarto membro do enum). É a mais próxima do que o TCC precisa para múltiplos provedores + replay. Deletado em `5ed6b6f8a4ae354640922c35c3308d3373afcc3c` ("refactor: single-source relay — Samsung SDK only, auto-start"), 2026-07-23 — **quatro dias antes** da outra remoção.
 
-Ordem cronológica real: `d7f6a593` (23/07, remove DataSource/Live/Passive/Repository) → `ef31abb` (27/07, remove SensorTracker/DebugSensorRegistry). O handoff cita só o segundo commit; o primeiro é onde está o enum de múltiplos provedores.
+Ordem cronológica real: `5ed6b6f8` (23/07, remove DataSource/Live/Passive/Repository) → `e8d87c6` (27/07, remove SensorTracker/DebugSensorRegistry). O handoff cita só o segundo commit; o primeiro é onde está o enum de múltiplos provedores.
 
 Os caminhos indicados no handoff também não batiam: `SensorTracker.kt` e `DebugSensorRegistry.kt` viviam em `data/health/debug/`, não direto em `data/health/`. Localizei os caminhos reais via `git log --diff-filter=A` e confirmei a remoção via `git log --diff-filter=D --summary`.
 
@@ -16,7 +16,7 @@ Os caminhos indicados no handoff também não batiam: `SensorTracker.kt` e `Debu
 ## Arquivos recuperados
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/model/DataSource.kt`
-(de `d7f6a593^`)
+(de `5ed6b6f8^`)
 ```kotlin
 package br.unioeste.pulselab.wear.model
 
@@ -43,7 +43,7 @@ enum class DataSource(val label: String, val badge: String) {
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/data/health/HeartRateRepository.kt`
-(de `d7f6a593^`)
+(de `5ed6b6f8^`)
 ```kotlin
 package br.unioeste.pulselab.wear.data.health
 
@@ -87,7 +87,7 @@ class HeartRateRepository {
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/data/health/LiveMeasureMonitor.kt`
-(de `d7f6a593^`)
+(de `5ed6b6f8^`)
 ```kotlin
 package br.unioeste.pulselab.wear.data.health
 
@@ -159,7 +159,7 @@ class LiveMeasureMonitor(context: Context) {
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/data/health/PassiveDataService.kt`
-(de `d7f6a593^`)
+(de `5ed6b6f8^`)
 ```kotlin
 package br.unioeste.pulselab.wear.data.health
 
@@ -236,7 +236,7 @@ class PassiveDataService : PassiveListenerService() {
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/data/health/PassiveHeartRateStore.kt`
-(de `d7f6a593^`)
+(de `5ed6b6f8^`)
 ```kotlin
 package br.unioeste.pulselab.wear.data.health
 
@@ -285,7 +285,7 @@ object PassiveHeartRateStore {
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/data/health/PassiveMonitoringManager.kt`
-(de `d7f6a593^`)
+(de `5ed6b6f8^`)
 ```kotlin
 package br.unioeste.pulselab.wear.data.health
 
@@ -342,7 +342,7 @@ class PassiveMonitoringManager(context: Context) {
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/model/HeartRateReading.kt`
-(bônus — não estava na lista pedida, mas é o tipo de dado que os seis arquivos acima usam; sem ele nenhum compila. De `ef31abb^`, que é o mesmo em `d7f6a593^` já que só foi deletado depois.)
+(bônus — não estava na lista pedida, mas é o tipo de dado que os seis arquivos acima usam; sem ele nenhum compila. De `e8d87c6^`, que é o mesmo em `5ed6b6f8^` já que só foi deletado depois.)
 ```kotlin
 package br.unioeste.pulselab.wear.model
 
@@ -360,7 +360,7 @@ data class HeartRateReading(
 ---
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/SensorTracker.kt`
-(de `ef31abb^`)
+(de `e8d87c6^`)
 ```kotlin
 package br.unioeste.pulselab.wear.data.health.debug
 
@@ -400,7 +400,7 @@ interface SensorTracker<T> {
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/DebugSensorRegistry.kt`
-(de `ef31abb^`)
+(de `e8d87c6^`)
 ```kotlin
 package br.unioeste.pulselab.wear.data.health.debug
 
@@ -594,7 +594,7 @@ class DebugSensorRegistry(context: Context) {
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/AccelerometerTracker.kt`
-(de `ef31abb^`)
+(de `e8d87c6^`)
 ```kotlin
 package br.unioeste.pulselab.wear.data.health.debug
 
@@ -663,7 +663,7 @@ class AccelerometerTracker(private val useContinuousType: Boolean = true) :
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/BiaTracker.kt`
-(de `ef31abb^`)
+(de `e8d87c6^`)
 ```kotlin
 package br.unioeste.pulselab.wear.data.health.debug
 
@@ -751,7 +751,7 @@ class BiaTracker(private val onDemand: Boolean = true) : SensorTracker<BiaReadin
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/EcgTracker.kt`
-(de `ef31abb^`)
+(de `e8d87c6^`)
 ```kotlin
 package br.unioeste.pulselab.wear.data.health.debug
 
@@ -833,7 +833,7 @@ class EcgTracker(private val onDemand: Boolean = false) : SensorTracker<EcgReadi
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/EdaTracker.kt`
-(de `ef31abb^`)
+(de `e8d87c6^`)
 ```kotlin
 package br.unioeste.pulselab.wear.data.health.debug
 
@@ -899,7 +899,7 @@ class EdaTracker : SensorTracker<EdaReading> {
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/MfBiaTracker.kt`
-(de `ef31abb^`)
+(de `e8d87c6^`)
 ```kotlin
 package br.unioeste.pulselab.wear.data.health.debug
 
@@ -988,7 +988,7 @@ class MfBiaTracker : SensorTracker<MfBiaReading> {
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/PpgTrackers.kt`
-(de `ef31abb^`)
+(de `e8d87c6^`)
 ```kotlin
 package br.unioeste.pulselab.wear.data.health.debug
 
@@ -1112,7 +1112,7 @@ class PpgIrTracker : SensorTracker<PpgReading> {
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/data/health/debug/SweatLossTracker.kt`
-(de `ef31abb^`)
+(de `e8d87c6^`)
 ```kotlin
 package br.unioeste.pulselab.wear.data.health.debug
 
@@ -1178,7 +1178,7 @@ class SweatLossTracker : SensorTracker<SweatLossReading> {
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/presentation/debug/SensorCapabilityViewModel.kt`
-(de `ef31abb^` — não estava na lista pedida, mas é consumidor direto de `DebugSensorRegistry`, incluído para o quadro ficar completo)
+(de `e8d87c6^` — não estava na lista pedida, mas é consumidor direto de `DebugSensorRegistry`, incluído para o quadro ficar completo)
 ```kotlin
 package br.unioeste.pulselab.wear.presentation.debug
 
@@ -1215,7 +1215,7 @@ class SensorCapabilityViewModel(application: Application) : AndroidViewModel(app
 ```
 
 ### `wear/src/main/java/br/unioeste/pulselab/wear/presentation/debug/SensorCapabilityScreen.kt`
-(de `ef31abb^` — não estava na lista pedida, incluído pelo mesmo motivo)
+(de `e8d87c6^` — não estava na lista pedida, incluído pelo mesmo motivo)
 ```kotlin
 package br.unioeste.pulselab.wear.presentation.debug
 
@@ -1385,13 +1385,13 @@ fun PreviewError() {
 
 ### Compilava sozinho, ou dependia de algo que só existia antes do refactor?
 
-**Grupo `DataSource`/`Live`/`Passive`/`Repository` (6 arquivos, de `d7f6a593^`):**
-- Todos dependem de `br.unioeste.pulselab.wear.model.HeartRateReading` — que **ainda existia** nesse ponto do histórico (só foi deletado 4 dias depois, em `ef31abb`). Hoje ele não existe mais na árvore; foi substituído por `SensorReading` (`wear/src/main/java/br/unioeste/pulselab/wear/model/SensorReading.kt`), com forma diferente (sem `stressIndex`, sem `isSimulated`; com `baevskySI`, `edaTonic`, `edaScrPerMin`, `motionFlag`).
+**Grupo `DataSource`/`Live`/`Passive`/`Repository` (6 arquivos, de `5ed6b6f8^`):**
+- Todos dependem de `br.unioeste.pulselab.wear.model.HeartRateReading` — que **ainda existia** nesse ponto do histórico (só foi deletado 4 dias depois, em `e8d87c6`). Hoje ele não existe mais na árvore; foi substituído por `SensorReading` (`wear/src/main/java/br/unioeste/pulselab/wear/model/SensorReading.kt`), com forma diferente (sem `stressIndex`, sem `isSimulated`; com `baevskySI`, `edaTonic`, `edaScrPerMin`, `motionFlag`).
 - `LiveMeasureMonitor.kt`, `PassiveDataService.kt`, `PassiveMonitoringManager.kt` dependem de `androidx.health.services.client.*` (Health Services). Essa dependência Gradle **ainda está declarada** hoje em `wear/build.gradle.kts:93` (`implementation(libs.androidx.health.services.client)`), mesmo sem nenhum arquivo fonte que a use atualmente — não precisaria adicionar a lib de volta.
 - `PassiveDataService.kt` chama `WearDataSender().send(applicationContext, bundle)` passando um **`SensorBundle` único**, com o construtor antigo (`bpm, hrv, spo2, stressIndex, timestamp, isSimulated`). O `SensorBundle` atual tem campos diferentes (`skinTemp`, `baevskySI`, `edaTonic`, `edaScrPerMin`, `motionFlag`, sem `stressIndex`/`isSimulated`) e o `WearDataSender.send()` atual espera um `SensorBatch` (lista), não um bundle único (`WearDataSender.kt:15`). **Não compila contra o código atual sem adaptação** — nem a forma do dado nem a assinatura do método batem mais.
 - Resumindo: nenhum destes 6 arquivos compila hoje "de graça". Todos dependiam de um tipo (`HeartRateReading`) que foi removido depois, e dois deles (`PassiveDataService.kt`, indiretamente `WearDataSender`) dependiam de uma forma de payload que também mudou.
 
-**Grupo `SensorTracker`/`DebugSensorRegistry`/trackers (9 arquivos + 2 de UI, de `ef31abb^`):**
+**Grupo `SensorTracker`/`DebugSensorRegistry`/trackers (9 arquivos + 2 de UI, de `e8d87c6^`):**
 - Dependem de `br.unioeste.pulselab.wear.data.health.SensorConnectionManager` — esse arquivo **ainda existe hoje**, inalterado o suficiente para o que é usado aqui: `tracker(type)` (`SensorConnectionManager.kt:71`) e `supportedTypes()` (`:65`) continuam com a mesma assinatura.
 - Não dependem de `HeartRateReading`, `SensorBundle`, nem de nada do fluxo de streaming — são isolados, exatamente como o comentário do próprio `SensorTracker.kt` promete ("kept separate from it so that file is never touched by debug additions").
 - **Este grupo compilaria hoje quase sem alteração** — é o único dos dois que não colidiu com mudanças posteriores no formato do payload.
